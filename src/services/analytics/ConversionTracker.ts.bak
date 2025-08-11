@@ -1,0 +1,600 @@
+import { logger } from '@/utils/logger';
+import { EmailJobModel } from '@/models';
+
+export interface EmailMetrics {
+  emailJobId: string;
+  prospectId: string;
+  campaignId: string;
+  subjectLine: string;
+  subjectLineStyle: string;
+  psychologicalTriggers: string[];
+  
+  // Tracking data
+  sentAt?: Date;
+  openedAt?: Date;
+  clickedAt?: Date;
+  repliedAt?: Date;
+  
+  // Conversion metrics
+  opened: boolean;
+  clicked: boolean;
+  replied: boolean;
+  
+  // Performance data
+  openRate: number;
+  clickRate: number;
+  replyRate: number;
+  
+  // A/B testing data
+  testVariant?: string;
+  testGroup?: string;
+  
+  // Attribution
+  industry: string;
+  businessStage: string;
+  marketPosition: string;
+  
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ConversionReport {
+  campaignId: string;
+  dateRange: {
+    start: Date;
+    end: Date;
+  };
+  
+  // Overall metrics
+  totalSent: number;
+  totalOpened: number;
+  totalClicked: number;
+  totalReplied: number;
+  
+  // Conversion rates
+  openRate: number;
+  clickRate: number;
+  replyRate: number;
+  
+  // Segmentation analysis
+  byIndustry: Record<string, {
+    sent: number;
+    opened: number;
+    clicked: number;
+    replied: number;
+    openRate: number;
+    clickRate: number;
+    replyRate: number;
+  }>;
+  
+  bySubjectLineStyle: Record<string, {
+    sent: number;
+    opened: number;
+    replied: number;
+    openRate: number;
+    replyRate: number;
+  }>;
+  
+  byPsychologicalTrigger: Record<string, {
+    sent: number;
+    opened: number;
+    replied: number;
+    openRate: number;
+    replyRate: number;
+  }>;
+  
+  // Performance insights
+  topPerformingSubjects: Array<{
+    subject: string;
+    style: string;
+    industry: string;
+    openRate: number;
+    replyRate: number;
+    sampleSize: number;
+  }>;
+  
+  improvementOpportunities: Array<{
+    category: string;
+    insight: string;
+    potentialImpact: number;
+    recommendation: string;
+  }>;
+  
+  generatedAt: Date;
+}
+
+export class ConversionTracker {
+  private static instance: ConversionTracker;
+  private metrics: Map<string, EmailMetrics> = new Map();
+
+  private constructor() {}
+
+  public static getInstance(): ConversionTracker {
+    if (!ConversionTracker.instance) {
+      ConversionTracker.instance = new ConversionTracker();
+    }
+    return ConversionTracker.instance;
+  }
+
+  public async trackEmailSent(
+    emailJobId: string,
+    prospectData: any,
+    campaignData: any,
+    generatedEmail: any,
+    analysis: any
+  ): Promise<void> {
+    try {
+      const metrics: EmailMetrics = {
+        emailJobId,
+        prospectId: prospectData._id.toString(),
+        campaignId: campaignData._id.toString(),
+        subjectLine: generatedEmail.subject,
+        subjectLineStyle: this.detectSubjectLineStyle(generatedEmail.subject),
+        psychologicalTriggers: this.extractTriggersFromPersonalizations(generatedEmail.personalizations),
+        
+        sentAt: new Date(),
+        opened: false,
+        clicked: false,
+        replied: false,
+        
+        openRate: 0,
+        clickRate: 0,
+        replyRate: 0,
+        
+        industry: analysis.businessContext?.industry || 'creative services',
+        businessStage: analysis.businessContext?.growthStage || 'unknown',
+        marketPosition: analysis.businessContext?.marketPosition || 'follower',
+        
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      this.metrics.set(emailJobId, metrics);
+
+      // Store in database for persistence
+      await EmailJobModel.findByIdAndUpdate(emailJobId, {
+        $set: {
+          'analytics.sentAt': metrics.sentAt,
+          'analytics.subjectLineStyle': metrics.subjectLineStyle,
+          'analytics.psychologicalTriggers': metrics.psychologicalTriggers,
+          'analytics.industry': metrics.industry,
+          'analytics.businessStage': metrics.businessStage,
+          'analytics.marketPosition': metrics.marketPosition
+        }
+      });
+
+      logger.info('Email tracking initiated', {
+        emailJobId,
+        subjectLineStyle: metrics.subjectLineStyle,
+        triggersCount: metrics.psychologicalTriggers.length,
+        industry: metrics.industry
+      });
+
+    } catch (error) {
+      logger.error('Failed to track email sent event', error);
+    }
+  }
+
+  public async trackEmailOpened(emailJobId: string, openedAt: Date = new Date()): Promise<void> {
+    try {
+      const metrics = this.metrics.get(emailJobId);
+      if (metrics) {
+        metrics.openedAt = openedAt;
+        metrics.opened = true;
+        metrics.openRate = 1.0;
+        metrics.updatedAt = new Date();
+
+        // Update database
+        await EmailJobModel.findByIdAndUpdate(emailJobId, {
+          $set: {
+            'analytics.openedAt': openedAt,
+            'analytics.opened': true,
+            'analytics.openRate': 1.0
+          }
+        });
+
+        logger.info('Email opened tracked', {
+          emailJobId,
+          timeToOpen: openedAt.getTime() - (metrics.sentAt?.getTime() || 0)
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to track email opened event', error);
+    }
+  }
+
+  public async trackEmailClicked(emailJobId: string, clickedAt: Date = new Date()): Promise<void> {
+    try {
+      const metrics = this.metrics.get(emailJobId);
+      if (metrics) {
+        metrics.clickedAt = clickedAt;
+        metrics.clicked = true;
+        metrics.clickRate = 1.0;
+        metrics.updatedAt = new Date();
+
+        // Update database
+        await EmailJobModel.findByIdAndUpdate(emailJobId, {
+          $set: {
+            'analytics.clickedAt': clickedAt,
+            'analytics.clicked': true,
+            'analytics.clickRate': 1.0
+          }
+        });
+
+        logger.info('Email clicked tracked', {
+          emailJobId,
+          timeToClick: clickedAt.getTime() - (metrics.sentAt?.getTime() || 0)
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to track email clicked event', error);
+    }
+  }
+
+  public async trackEmailReplied(emailJobId: string, repliedAt: Date = new Date()): Promise<void> {
+    try {
+      const metrics = this.metrics.get(emailJobId);
+      if (metrics) {
+        metrics.repliedAt = repliedAt;
+        metrics.replied = true;
+        metrics.replyRate = 1.0;
+        metrics.updatedAt = new Date();
+
+        // Update database
+        await EmailJobModel.findByIdAndUpdate(emailJobId, {
+          $set: {
+            'analytics.repliedAt': repliedAt,
+            'analytics.replied': true,
+            'analytics.replyRate': 1.0
+          }
+        });
+
+        logger.info('Email reply tracked - CONVERSION SUCCESS!', {
+          emailJobId,
+          timeToReply: repliedAt.getTime() - (metrics.sentAt?.getTime() || 0),
+          industry: metrics.industry,
+          subjectLineStyle: metrics.subjectLineStyle
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to track email replied event', error);
+    }
+  }
+
+  public async generateConversionReport(
+    campaignId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<ConversionReport> {
+    try {
+      logger.info('Generating conversion report', {
+        campaignId,
+        dateRange: { start: startDate, end: endDate }
+      });
+
+      // Fetch analytics data from database
+      const emailJobs = await EmailJobModel.find({
+        campaignId,
+        'analytics.sentAt': {
+          $gte: startDate,
+          $lte: endDate
+        }
+      });
+
+      const totalSent = emailJobs.length;
+      const totalOpened = emailJobs.filter(job => job.analytics?.opened).length;
+      const totalClicked = emailJobs.filter(job => job.analytics?.clicked).length;
+      const totalReplied = emailJobs.filter(job => job.analytics?.replied).length;
+
+      const openRate = totalSent > 0 ? (totalOpened / totalSent) * 100 : 0;
+      const clickRate = totalOpened > 0 ? (totalClicked / totalOpened) * 100 : 0;
+      const replyRate = totalSent > 0 ? (totalReplied / totalSent) * 100 : 0;
+
+      // Generate segmentation analysis
+      const byIndustry = this.generateIndustryAnalysis(emailJobs);
+      const bySubjectLineStyle = this.generateSubjectLineAnalysis(emailJobs);
+      const byPsychologicalTrigger = this.generateTriggerAnalysis(emailJobs);
+
+      // Generate performance insights
+      const topPerformingSubjects = this.getTopPerformingSubjects(emailJobs);
+      const improvementOpportunities = this.generateImprovementRecommendations(
+        { openRate, clickRate, replyRate },
+        byIndustry,
+        bySubjectLineStyle,
+        byPsychologicalTrigger
+      );
+
+      const report: ConversionReport = {
+        campaignId,
+        dateRange: { start: startDate, end: endDate },
+        totalSent,
+        totalOpened,
+        totalClicked,
+        totalReplied,
+        openRate: Math.round(openRate * 100) / 100,
+        clickRate: Math.round(clickRate * 100) / 100,
+        replyRate: Math.round(replyRate * 100) / 100,
+        byIndustry,
+        bySubjectLineStyle,
+        byPsychologicalTrigger,
+        topPerformingSubjects,
+        improvementOpportunities,
+        generatedAt: new Date()
+      };
+
+      logger.info('Conversion report generated', {
+        campaignId,
+        totalSent,
+        openRate: report.openRate,
+        replyRate: report.replyRate,
+        opportunitiesCount: improvementOpportunities.length
+      });
+
+      return report;
+
+    } catch (error) {
+      logger.error('Failed to generate conversion report', error);
+      throw error;
+    }
+  }
+
+  private detectSubjectLineStyle(subject: string): string {
+    const lowerSubject = subject.toLowerCase();
+    
+    if (lowerSubject.includes('?')) return 'question';
+    if (lowerSubject.includes('your') || lowerSubject.includes('quick')) return 'personalized';
+    if (lowerSubject.includes('how') || lowerSubject.includes('other')) return 'social-proof';
+    if (lowerSubject.includes('insight') || lowerSubject.includes('opportunity')) return 'curiosity';
+    if (lowerSubject.includes('streamline') || lowerSubject.includes('optimize')) return 'benefit';
+    
+    return 'generic';
+  }
+
+  private extractTriggersFromPersonalizations(personalizations: string[]): string[] {
+    const triggers: string[] = [];
+    
+    for (const personalization of personalizations) {
+      const lower = personalization.toLowerCase();
+      if (lower.includes('social-proof:')) triggers.push('social-proof');
+      if (lower.includes('authority:')) triggers.push('authority');
+      if (lower.includes('scarcity:')) triggers.push('scarcity');
+      if (lower.includes('reciprocity:')) triggers.push('reciprocity');
+      if (lower.includes('consensus:')) triggers.push('consensus');
+    }
+    
+    return triggers;
+  }
+
+  private generateIndustryAnalysis(emailJobs: any[]): Record<string, any> {
+    const industryStats: Record<string, any> = {};
+    
+    for (const job of emailJobs) {
+      const industry = job.analytics?.industry || 'unknown';
+      if (!industryStats[industry]) {
+        industryStats[industry] = {
+          sent: 0,
+          opened: 0,
+          clicked: 0,
+          replied: 0,
+          openRate: 0,
+          clickRate: 0,
+          replyRate: 0
+        };
+      }
+      
+      const stats = industryStats[industry];
+      stats.sent++;
+      if (job.analytics?.opened) stats.opened++;
+      if (job.analytics?.clicked) stats.clicked++;
+      if (job.analytics?.replied) stats.replied++;
+    }
+    
+    // Calculate rates
+    for (const stats of Object.values(industryStats)) {
+      const s = stats as any;
+      s.openRate = s.sent > 0 ? Math.round((s.opened / s.sent) * 10000) / 100 : 0;
+      s.clickRate = s.opened > 0 ? Math.round((s.clicked / s.opened) * 10000) / 100 : 0;
+      s.replyRate = s.sent > 0 ? Math.round((s.replied / s.sent) * 10000) / 100 : 0;
+    }
+    
+    return industryStats;
+  }
+
+  private generateSubjectLineAnalysis(emailJobs: any[]): Record<string, any> {
+    const styleStats: Record<string, any> = {};
+    
+    for (const job of emailJobs) {
+      const style = job.analytics?.subjectLineStyle || 'generic';
+      if (!styleStats[style]) {
+        styleStats[style] = {
+          sent: 0,
+          opened: 0,
+          replied: 0,
+          openRate: 0,
+          replyRate: 0
+        };
+      }
+      
+      const stats = styleStats[style];
+      stats.sent++;
+      if (job.analytics?.opened) stats.opened++;
+      if (job.analytics?.replied) stats.replied++;
+    }
+    
+    // Calculate rates
+    for (const stats of Object.values(styleStats)) {
+      const s = stats as any;
+      s.openRate = s.sent > 0 ? Math.round((s.opened / s.sent) * 10000) / 100 : 0;
+      s.replyRate = s.sent > 0 ? Math.round((s.replied / s.sent) * 10000) / 100 : 0;
+    }
+    
+    return styleStats;
+  }
+
+  private generateTriggerAnalysis(emailJobs: any[]): Record<string, any> {
+    const triggerStats: Record<string, any> = {};
+    
+    for (const job of emailJobs) {
+      const triggers = job.analytics?.psychologicalTriggers || [];
+      for (const trigger of triggers) {
+        if (!triggerStats[trigger]) {
+          triggerStats[trigger] = {
+            sent: 0,
+            opened: 0,
+            replied: 0,
+            openRate: 0,
+            replyRate: 0
+          };
+        }
+        
+        const stats = triggerStats[trigger];
+        stats.sent++;
+        if (job.analytics?.opened) stats.opened++;
+        if (job.analytics?.replied) stats.replied++;
+      }
+    }
+    
+    // Calculate rates
+    for (const stats of Object.values(triggerStats)) {
+      const s = stats as any;
+      s.openRate = s.sent > 0 ? Math.round((s.opened / s.sent) * 10000) / 100 : 0;
+      s.replyRate = s.sent > 0 ? Math.round((s.replied / s.sent) * 10000) / 100 : 0;
+    }
+    
+    return triggerStats;
+  }
+
+  private getTopPerformingSubjects(emailJobs: any[]): Array<any> {
+    const subjectStats: Record<string, any> = {};
+    
+    for (const job of emailJobs) {
+      if (!job.generatedEmail?.subject) continue;
+      
+      const subject = job.generatedEmail.subject;
+      if (!subjectStats[subject]) {
+        subjectStats[subject] = {
+          subject,
+          style: job.analytics?.subjectLineStyle || 'generic',
+          industry: job.analytics?.industry || 'unknown',
+          sent: 0,
+          opened: 0,
+          replied: 0,
+          openRate: 0,
+          replyRate: 0
+        };
+      }
+      
+      const stats = subjectStats[subject];
+      stats.sent++;
+      if (job.analytics?.opened) stats.opened++;
+      if (job.analytics?.replied) stats.replied++;
+    }
+    
+    // Calculate rates and filter for meaningful sample sizes
+    const validSubjects = Object.values(subjectStats)
+      .map((stats: any) => ({
+        ...stats,
+        openRate: stats.sent > 0 ? Math.round((stats.opened / stats.sent) * 10000) / 100 : 0,
+        replyRate: stats.sent > 0 ? Math.round((stats.replied / stats.sent) * 10000) / 100 : 0,
+        sampleSize: stats.sent
+      }))
+      .filter(stats => stats.sampleSize >= 3) // Minimum sample size for reliability
+      .sort((a, b) => b.replyRate - a.replyRate); // Sort by reply rate (most important metric)
+    
+    return validSubjects.slice(0, 10); // Top 10
+  }
+
+  private generateImprovementRecommendations(
+    overallMetrics: any,
+    industryAnalysis: Record<string, any>,
+    subjectAnalysis: Record<string, any>,
+    triggerAnalysis: Record<string, any>
+  ): Array<any> {
+    const recommendations: Array<any> = [];
+    
+    // Overall performance recommendations
+    if (overallMetrics.openRate < 15) {
+      recommendations.push({
+        category: 'Subject Lines',
+        insight: `Open rate of ${overallMetrics.openRate}% is below industry average (20-25%)`,
+        potentialImpact: 8,
+        recommendation: 'Focus on more compelling subject lines with curiosity and personalization'
+      });
+    }
+    
+    if (overallMetrics.replyRate < 3) {
+      recommendations.push({
+        category: 'Email Content',
+        insight: `Reply rate of ${overallMetrics.replyRate}% indicates low engagement`,
+        potentialImpact: 10,
+        recommendation: 'Enhance psychological triggers and industry-specific personalization'
+      });
+    }
+    
+    // Industry-specific recommendations
+    const topIndustry = Object.entries(industryAnalysis)
+      .sort(([,a], [,b]) => (b as any).replyRate - (a as any).replyRate)[0];
+    
+    if (topIndustry && (topIndustry[1] as any).replyRate > overallMetrics.replyRate * 1.5) {
+      recommendations.push({
+        category: 'Industry Targeting',
+        insight: `${topIndustry[0]} shows ${(topIndustry[1] as any).replyRate}% reply rate vs ${overallMetrics.replyRate}% average`,
+        potentialImpact: 7,
+        recommendation: `Apply successful ${topIndustry[0]} messaging patterns to other industries`
+      });
+    }
+    
+    // Subject line style recommendations
+    const bestSubjectStyle = Object.entries(subjectAnalysis)
+      .sort(([,a], [,b]) => (b as any).replyRate - (a as any).replyRate)[0];
+    
+    if (bestSubjectStyle && (bestSubjectStyle[1] as any).replyRate > overallMetrics.replyRate * 1.3) {
+      recommendations.push({
+        category: 'Subject Line Optimization',
+        insight: `${bestSubjectStyle[0]} subject lines achieve ${(bestSubjectStyle[1] as any).replyRate}% reply rate`,
+        potentialImpact: 6,
+        recommendation: `Increase use of ${bestSubjectStyle[0]} style subject lines`
+      });
+    }
+    
+    // Sort by potential impact
+    return recommendations.sort((a, b) => b.potentialImpact - a.potentialImpact);
+  }
+
+  public async getQuickMetrics(campaignId: string): Promise<{
+    todaysSent: number;
+    todaysOpened: number;
+    todaysReplied: number;
+    weeklyTrend: {
+      sent: number;
+      openRate: number;
+      replyRate: number;
+    };
+  }> {
+    const today = new Date();
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    const [todayJobs, weekJobs] = await Promise.all([
+      EmailJobModel.find({
+        campaignId,
+        'analytics.sentAt': { $gte: startOfDay }
+      }),
+      EmailJobModel.find({
+        campaignId,
+        'analytics.sentAt': { $gte: weekAgo }
+      })
+    ]);
+    
+    return {
+      todaysSent: todayJobs.length,
+      todaysOpened: todayJobs.filter(j => j.analytics?.opened).length,
+      todaysReplied: todayJobs.filter(j => j.analytics?.replied).length,
+      weeklyTrend: {
+        sent: weekJobs.length,
+        openRate: weekJobs.length > 0 ? (weekJobs.filter(j => j.analytics?.opened).length / weekJobs.length) * 100 : 0,
+        replyRate: weekJobs.length > 0 ? (weekJobs.filter(j => j.analytics?.replied).length / weekJobs.length) * 100 : 0
+      }
+    };
+  }
+}

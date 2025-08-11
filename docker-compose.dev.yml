@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # Development application with hot reload
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: email-generator-app-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "9229:9229"  # Debug port
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - MONGODB_URI=mongodb://mongo:27017/email-generator-dev
+      - REDIS_URL=redis://redis:6379
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - email-generator-network
+    command: npm run dev
+
+  # MongoDB for development
+  mongo:
+    image: mongo:6.0
+    container_name: email-generator-mongo-dev
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=email-generator-dev
+    volumes:
+      - mongo-dev-data:/data/db
+    networks:
+      - email-generator-network
+
+  # Redis for development
+  redis:
+    image: redis:7-alpine
+    container_name: email-generator-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-dev-data:/data
+    networks:
+      - email-generator-network
+
+  # MongoDB Express for development
+  mongo-express:
+    image: mongo-express:latest
+    container_name: email-generator-mongo-express-dev
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_URL=mongodb://mongo:27017/
+    depends_on:
+      - mongo
+    networks:
+      - email-generator-network
+
+  # Redis Commander for development
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: email-generator-redis-commander-dev
+    restart: unless-stopped
+    ports:
+      - "8082:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+    networks:
+      - email-generator-network
+
+volumes:
+  mongo-dev-data:
+    driver: local
+  redis-dev-data:
+    driver: local
+
+networks:
+  email-generator-network:
+    driver: bridge
