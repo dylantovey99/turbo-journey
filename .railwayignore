@@ -1,0 +1,21 @@
+# Test files
+test-*.js
+test-*.ts
+tests/
+
+# Development files
+*.log
+.env.local
+.env.example
+
+# Build cache
+.cache/
+coverage/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
