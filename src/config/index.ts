@@ -23,8 +23,13 @@ export const config = {
     defaultAccountId: process.env.MISSIVE_DEFAULT_ACCOUNT_ID || '',
   },
   
+  organization: {
+    domains: process.env.ORGANIZATION_DOMAINS?.split(',').map(d => d.trim()) || ['example.com'],
+    name: process.env.ORGANIZATION_NAME || 'Email Generator',
+  },
+  
   claude: {
-    apiKey: process.env.CLAUDE_API_KEY || '',
+    apiKey: process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY || '',
     model: process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-20241022',
     maxTokens: parseInt(process.env.CLAUDE_MAX_TOKENS || '2000'),
     temperature: parseFloat(process.env.CLAUDE_TEMPERATURE || '0.7'),

@@ -52,7 +52,10 @@ const EmailJobSchema = new Schema({
     metadata: {
       timestamp: { type: Date },
       fromEmail: { type: String },
-      subject: { type: String }
+      subject: { type: String },
+      conversationId: { type: String, index: true }, // For Missive conversation tracking
+      messageId: { type: String, index: true }, // For sent message tracking
+      webhookSource: { type: String, enum: ['webhook', 'polling'], default: 'polling' } // How response was detected
     },
     analyzedAt: { type: Date }
   },
@@ -90,6 +93,11 @@ EmailJobSchema.index({ prospectId: 1, campaignId: 1 }, { unique: true });
 EmailJobSchema.index({ status: 1 });
 EmailJobSchema.index({ createdAt: -1 });
 EmailJobSchema.index({ campaignId: 1, status: 1 });
+EmailJobSchema.index({ missiveDraftId: 1 });
+EmailJobSchema.index({ 'response.metadata.conversationId': 1 });
+EmailJobSchema.index({ 'response.metadata.messageId': 1 });
+EmailJobSchema.index({ 'analytics.sentAt': -1 });
+EmailJobSchema.index({ 'response.analyzedAt': 1 });
 
 let _emailJobModel: mongoose.Model<EmailJobDocument> | null = null;
 

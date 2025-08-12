@@ -2,6 +2,7 @@ import express from 'express';
 import prospectRoutes from './prospects';
 import campaignRoutes from './campaigns';
 import bulkRoutes from './bulk';
+import webhookRoutes from './webhooks';
 import { WorkflowOrchestrator } from '@/services/workflow';
 import { logger } from '@/utils/logger';
 
@@ -19,6 +20,7 @@ function getWorkflowOrchestrator(): WorkflowOrchestrator {
 router.use('/prospects', prospectRoutes);
 router.use('/campaigns', campaignRoutes);
 router.use('/bulk', bulkRoutes);
+router.use('/webhooks', webhookRoutes);
 
 // Global system status endpoint
 router.get('/status', async (req, res) => {
@@ -139,6 +141,12 @@ router.get('/docs', (req, res) => {
           'GET /api/v1/status': 'Get system status',
           'GET /api/v1/health/detailed': 'Detailed health check',
           'GET /api/v1/docs': 'API documentation'
+        },
+        webhooks: {
+          'POST /api/v1/webhooks/missive': 'Handle Missive webhooks for response notifications',
+          'GET /api/v1/webhooks/missive/health': 'Webhook service health check',
+          'POST /api/v1/webhooks/missive/test': 'Test webhook handling (dev only)',
+          'POST /api/v1/webhooks/missive/monitor-responses': 'Manual response monitoring trigger'
         }
       }
     }

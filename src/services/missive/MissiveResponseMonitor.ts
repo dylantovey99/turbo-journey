@@ -171,15 +171,81 @@ export class MissiveResponseMonitor {
   private async checkEmailJobForResponse(emailJob: any): Promise<void> {
     try {
       if (!emailJob.missiveDraftId) {
+        logger.debug(`Email job ${emailJob._id} has no Missive draft ID - skipping response check`);
+        return;
+      }
+
+      // Check if email was actually sent
+      if (!emailJob.analytics?.sentAt) {
+        logger.debug(`Email job ${emailJob._id} was not sent yet - skipping response check`);
         return;
       }
 
       // Get conversation from Missive using the draft ID
-      const conversation = await this.missiveClient.getConversationByDraftId(
-        emailJob.missiveDraftId
-      );
+      let conversation = null;
+      try {
+        conversation = await this.missiveClient.getConversationByDraftId(
+          emailJob.missiveDraftId
+        );
+      } catch (conversationError) {
+        logger.warn(`Failed to get conversation for draft ${emailJob.missiveDraftId}`, {
+          emailJobId: emailJob._id,
+          error: conversationError instanceof Error ? conversationError.message : 'Unknown error'
+        });
+
+        // If conversation lookup fails, try alternative correlation methods
+        const prospect = emailJob.prospectId as any;
+        const prospectEmail = prospect.contactEmail || prospect.email;
+
+        if (prospectEmail) {
+          try {
+            // Try to find conversations by participant email
+            const conversations = await this.missiveClient.findConversationsByParticipant(
+              prospectEmail,
+              10 // Limit to recent conversations
+            );
+
+            if (conversations.length > 0) {
+              // Find the most recent conversation that could match our email
+              conversation = conversations.find(conv => {
+                const convDate = new Date(conv.created_at || conv.updated_at);
+                const sentDate = emailJob.analytics.sentAt;
+                const timeDiff = Math.abs(convDate.getTime() - sentDate.getTime());
+                const oneDayMs = 24 * 60 * 60 * 1000;
+
+                // Conversation should be within 1 day of when we sent the email
+                return timeDiff <= oneDayMs;
+              }) || conversations[0]; // Fallback to most recent
+
+              if (conversation) {
+                // Store the conversation ID for future reference
+                await EmailJobModel.findByIdAndUpdate(emailJob._id, {
+                  'response.metadata.conversationId': conversation.id
+                });
+
+                logger.info(`Found conversation via participant correlation`, {
+                  emailJobId: emailJob._id,
+                  conversationId: conversation.id,
+                  prospectEmail
+                });
+              }
+            }
+          } catch (correlationError) {
+            logger.error(`Failed to correlate conversation for email job ${emailJob._id}`, {
+              prospectEmail,
+              error: correlationError instanceof Error ? correlationError.message : 'Unknown error'
+            });
+          }
+        }
+
+        if (!conversation) {
+          logger.debug(`No conversation found for email job ${emailJob._id} - email may not have been sent or replied to yet`);
+          return;
+        }
+      }
 
       if (!conversation) {
+        logger.debug(`No conversation available for email job ${emailJob._id}`);
         return;
       }
 
@@ -188,38 +254,82 @@ export class MissiveResponseMonitor {
       const prospectEmail = prospect.contactEmail || prospect.email;
 
       if (!prospectEmail) {
+        logger.warn(`Email job ${emailJob._id} has no prospect email - cannot check for responses`);
         return;
       }
 
       // Look for replies from the prospect
-      const replies = await this.missiveClient.getConversationReplies(
-        conversation.id,
-        prospectEmail,
-        emailJob.analytics?.sentAt || emailJob.createdAt
-      );
+      let replies = [];
+      try {
+        replies = await this.missiveClient.getConversationReplies(
+          conversation.id,
+          prospectEmail,
+          emailJob.analytics.sentAt
+        );
+      } catch (repliesError) {
+        logger.error(`Failed to get conversation replies for ${conversation.id}`, {
+          emailJobId: emailJob._id,
+          prospectEmail,
+          error: repliesError instanceof Error ? repliesError.message : 'Unknown error'
+        });
+        return;
+      }
 
       if (replies && replies.length > 0) {
         // Process the most recent reply
         const latestReply = replies[0];
         
-        await this.responseAnalyzer.analyzeResponse(
-          emailJob._id.toString(),
-          latestReply.body || latestReply.preview,
-          {
-            timestamp: new Date(latestReply.created_at),
-            fromEmail: latestReply.from,
-            subject: conversation.subject
-          }
-        );
+        try {
+          await this.responseAnalyzer.analyzeResponse(
+            emailJob._id.toString(),
+            latestReply.body || latestReply.preview,
+            {
+              timestamp: new Date(latestReply.created_at),
+              fromEmail: latestReply.from,
+              subject: conversation.subject,
+              conversationId: conversation.id,
+              messageId: latestReply.id,
+              webhookSource: 'polling'
+            }
+          );
 
-        logger.info(`Processed response for email job ${emailJob._id}`, {
+          logger.info(`Processed response for email job ${emailJob._id}`, {
+            prospectEmail,
+            conversationId: conversation.id,
+            responseLength: (latestReply.body || latestReply.preview).length,
+            responseDate: latestReply.created_at
+          });
+        } catch (analysisError) {
+          logger.error(`Failed to analyze response for email job ${emailJob._id}`, {
+            conversationId: conversation.id,
+            messageId: latestReply.id,
+            error: analysisError instanceof Error ? analysisError.message : 'Unknown error'
+          });
+        }
+      } else {
+        logger.debug(`No replies found for email job ${emailJob._id}`, {
+          conversationId: conversation.id,
           prospectEmail,
-          responseLength: (latestReply.body || latestReply.preview).length
+          sentAt: emailJob.analytics.sentAt.toISOString()
         });
       }
 
     } catch (error) {
-      logger.error(`Failed to check email job ${emailJob._id} for response`, error);
+      logger.error(`Failed to check email job ${emailJob._id} for response`, {
+        emailJobId: emailJob._id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
+
+      // Mark the email job as having a response check error, but don't fail completely
+      try {
+        await EmailJobModel.findByIdAndUpdate(emailJob._id, {
+          'response.lastCheckError': error instanceof Error ? error.message : 'Unknown error',
+          'response.lastCheckedAt': new Date()
+        });
+      } catch (updateError) {
+        logger.error(`Failed to update email job error status for ${emailJob._id}`, updateError);
+      }
     }
   }
 
@@ -278,16 +388,26 @@ export class MissiveResponseMonitor {
    */
   private async findEmailJobByConversation(conversation: any, message: any): Promise<any> {
     try {
-      // Try to find by missive draft ID first (most reliable)
-      // This would require storing the conversation ID when creating drafts
-      
-      // For now, try to match by prospect email and timeframe
+      // Strategy 1: Try to find by stored conversation/draft correlation
+      if (conversation.id) {
+        const emailJob = await EmailJobModel.findOne({
+          'response.metadata.conversationId': conversation.id
+        }).populate('prospectId');
+        
+        if (emailJob) {
+          logger.debug(`Found email job by conversation ID: ${conversation.id}`);
+          return emailJob;
+        }
+      }
+
+      // Strategy 2: Try to match by prospect email and conversation subject
       const participants = conversation.participants || [];
       const prospectEmails = participants
-        .map((p: any) => p.email)
+        .map((p: any) => p.email?.address || p.email)
         .filter((email: string) => email && !this.isOurEmail(email));
 
       if (prospectEmails.length === 0) {
+        logger.debug('No prospect emails found in conversation participants');
         return null;
       }
 
@@ -295,11 +415,37 @@ export class MissiveResponseMonitor {
       const recentCutoff = new Date();
       recentCutoff.setDate(recentCutoff.getDate() - 30); // Look back 30 days
 
+      // Find prospects with matching emails
+      const { ProspectModel } = await import('@/models');
+      const prospects = await ProspectModel.find({
+        contactEmail: { $in: prospectEmails }
+      });
+
+      if (prospects.length === 0) {
+        logger.debug(`No prospects found with emails: ${prospectEmails.join(', ')}`);
+        return null;
+      }
+
+      const prospectIds = prospects.map(p => p._id);
+
+      // Find the most recent email job for these prospects
       const emailJob = await EmailJobModel.findOne({
         status: 'completed',
+        prospectId: { $in: prospectIds },
         createdAt: { $gte: recentCutoff },
-        'prospectId.contactEmail': { $in: prospectEmails }
-      }).populate('prospectId');
+        'response.analyzedAt': { $exists: false } // Not already analyzed
+      })
+      .populate('prospectId')
+      .sort({ createdAt: -1 }); // Most recent first
+
+      if (emailJob) {
+        logger.debug(`Found email job by prospect correlation: ${emailJob._id}`);
+        
+        // Store conversation ID for future correlation
+        await EmailJobModel.findByIdAndUpdate(emailJob._id, {
+          'response.metadata.conversationId': conversation.id
+        });
+      }
 
       return emailJob;
 
@@ -323,21 +469,102 @@ export class MissiveResponseMonitor {
    * Check if email is from our organization
    */
   private isOurEmail(email: string): boolean {
-    // In a full implementation, this would check against our domain(s)
-    // For now, basic check for common patterns
+    if (!email) return false;
+    
     const lowerEmail = email.toLowerCase();
-    return lowerEmail.includes('noreply') || 
-           lowerEmail.includes('support') || 
-           lowerEmail.includes('admin');
+    
+    // Get our organization's domains from config or environment
+    const ourDomains = this.getOrganizationDomains();
+    
+    // Check if the email domain matches any of our domains
+    for (const domain of ourDomains) {
+      if (lowerEmail.endsWith(`@${domain.toLowerCase()}`)) {
+        return true;
+      }
+    }
+    
+    // Common organizational email patterns
+    const organizationalPatterns = [
+      'noreply',
+      'no-reply', 
+      'support',
+      'admin',
+      'hello',
+      'info',
+      'contact',
+      'team'
+    ];
+    
+    return organizationalPatterns.some(pattern => 
+      lowerEmail.includes(`${pattern}@`) || lowerEmail.includes(`@${pattern}`)
+    );
+  }
+  
+  /**
+   * Get organization domains from configuration
+   */
+  private getOrganizationDomains(): string[] {
+    try {
+      // Try to get from config first
+      const { config } = require('@/config');
+      if (config.organization?.domains) {
+        return config.organization.domains;
+      }
+      
+      // Fallback to environment variable
+      const domainsEnv = process.env.ORGANIZATION_DOMAINS;
+      if (domainsEnv) {
+        return domainsEnv.split(',').map(d => d.trim());
+      }
+      
+      // Default fallback - should be configured in production
+      return ['example.com'];
+      
+    } catch (error) {
+      logger.warn('Failed to get organization domains, using default', error);
+      return ['example.com'];
+    }
   }
 
   /**
-   * Verify webhook signature
+   * Verify webhook signature using HMAC SHA-256
    */
   private verifyWebhookSignature(payload: string, signature: string, secret: string): boolean {
-    // In a full implementation, verify HMAC signature
-    // For now, just check if signature exists
-    return signature && signature.length > 0;
+    if (!signature || !secret) {
+      logger.warn('Webhook signature or secret missing');
+      return false;
+    }
+
+    try {
+      const crypto = require('crypto');
+      
+      // Compute HMAC SHA-256 signature
+      const computedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(payload, 'utf8')
+        .digest('hex');
+      
+      const expectedSignature = `sha256=${computedSignature}`;
+      
+      // Use timing-attack-resistant comparison
+      const signaturesMatch = crypto.timingSafeEqual(
+        Buffer.from(expectedSignature),
+        Buffer.from(signature)
+      );
+      
+      if (!signaturesMatch) {
+        logger.warn('Webhook signature verification failed', {
+          expected: expectedSignature,
+          received: signature
+        });
+      }
+      
+      return signaturesMatch;
+      
+    } catch (error) {
+      logger.error('Failed to verify webhook signature', error);
+      return false;
+    }
   }
 
   /**

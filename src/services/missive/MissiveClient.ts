@@ -42,6 +42,7 @@ export class MissiveClient {
   private client: AxiosInstance;
   private lastRequestTime: number = 0;
   private readonly minInterval: number = 1000; // 1 second between requests
+  private static instance: MissiveClient;
 
   constructor(missiveConfig?: Partial<MissiveConfig>) {
     const apiConfig = {
@@ -66,6 +67,13 @@ export class MissiveClient {
 
     this.setupInterceptors();
     logger.info('MissiveClient initialized', { baseUrl: apiConfig.baseUrl });
+  }
+
+  public static getInstance(): MissiveClient {
+    if (!MissiveClient.instance) {
+      MissiveClient.instance = new MissiveClient();
+    }
+    return MissiveClient.instance;
   }
 
   private setupInterceptors(): void {
@@ -240,12 +248,81 @@ export class MissiveClient {
 
       logger.info('Missive draft sent successfully', {
         draftId,
-        messageId: response.data.id
+        messageId: response.data.id,
+        conversationId: response.data.conversation_id
       });
 
       return response.data;
     } catch (error) {
       logger.error(`Failed to send Missive draft: ${draftId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send draft and capture conversation ID for reply monitoring
+   */
+  public async sendDraftWithTracking(draftId: string, emailJobId: string): Promise<{
+    messageId: string;
+    conversationId: string;
+    sentAt: Date;
+  }> {
+    try {
+      logger.info('Sending Missive draft with tracking', { draftId, emailJobId });
+
+      // Send the draft
+      const response = await this.client.post(`/drafts/${draftId}/send`);
+      
+      const messageId = response.data.id;
+      const conversationId = response.data.conversation_id;
+      const sentAt = new Date();
+
+      if (!conversationId) {
+        logger.error('No conversation ID returned from Missive after sending', { 
+          draftId, 
+          messageId,
+          response: response.data 
+        });
+        throw new Error('Missive did not return conversation ID after sending draft');
+      }
+
+      // Update the email job with conversation tracking info
+      const { EmailJobModel } = await import('@/models');
+      await EmailJobModel.findByIdAndUpdate(emailJobId, {
+        'response.metadata.conversationId': conversationId,
+        'response.metadata.messageId': messageId,
+        'analytics.sentAt': sentAt,
+        status: 'completed'
+      });
+
+      logger.info('Draft sent and tracking updated', {
+        draftId,
+        emailJobId,
+        messageId,
+        conversationId,
+        sentAt: sentAt.toISOString()
+      });
+
+      return {
+        messageId,
+        conversationId,
+        sentAt
+      };
+
+    } catch (error) {
+      logger.error(`Failed to send draft with tracking: ${draftId}`, error);
+      
+      // Update email job status to failed
+      try {
+        const { EmailJobModel } = await import('@/models');
+        await EmailJobModel.findByIdAndUpdate(emailJobId, {
+          status: 'failed',
+          error: error instanceof Error ? error.message : 'Unknown error sending draft'
+        });
+      } catch (updateError) {
+        logger.error('Failed to update email job status after send failure', updateError);
+      }
+      
       throw error;
     }
   }
@@ -276,11 +353,167 @@ export class MissiveClient {
 
   public async healthCheck(): Promise<boolean> {
     try {
-      await this.client.get('/health');
+      // Test with drafts endpoint which is more universally available
+      await this.client.get('/drafts', { params: { limit: 1 } });
       return true;
     } catch (error) {
       logger.error('Missive health check failed', error);
       return false;
+    }
+  }
+
+  private getDefaultAccountId(): string {
+    return config.missive.defaultAccountId || 'me'; // 'me' is a valid fallback in Missive API
+  }
+
+  /**
+   * Get conversation by draft ID (for response monitoring)
+   */
+  public async getConversationByDraftId(draftId: string): Promise<any> {
+    try {
+      logger.debug(`Getting conversation for draft: ${draftId}`);
+      
+      // First, check if we have the conversation ID stored in email jobs
+      const { EmailJobModel } = await import('@/models');
+      const emailJob = await EmailJobModel.findOne({ 
+        missiveDraftId: draftId,
+        'response.metadata.conversationId': { $exists: true, $ne: null }
+      });
+      
+      if (emailJob?.response?.metadata?.conversationId) {
+        logger.debug(`Found stored conversation ID for draft: ${draftId}`);
+        return await this.getConversation(emailJob.response.metadata.conversationId);
+      }
+      
+      // Fallback: try to get the draft to find the conversation ID
+      const draft = await this.getDraft(draftId);
+      if (draft?.conversation_id) {
+        logger.debug(`Found conversation ID in draft response: ${draftId}`);
+        return await this.getConversation(draft.conversation_id);
+      }
+      
+      // If still no conversation_id, the draft may not have been sent yet
+      logger.warn(`No conversation ID found for draft: ${draftId}. Draft may not have been sent yet.`);
+      return null;
+      
+    } catch (error) {
+      logger.error(`Failed to get conversation for draft: ${draftId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get specific conversation
+   */
+  public async getConversation(conversationId: string): Promise<any> {
+    try {
+      const response = await this.client.get(`/conversations/${conversationId}`);
+      return response.data;
+    } catch (error) {
+      logger.error(`Failed to get conversation: ${conversationId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * List conversations with filtering
+   */
+  public async listConversations(params: {
+    limit?: number;
+    until?: string;
+    inbox?: boolean;
+    assigned?: boolean;
+    closed?: boolean;
+    flagged?: boolean;
+  } = {}): Promise<any[]> {
+    try {
+      const response = await this.client.get('/conversations', { params });
+      return response.data.conversations || [];
+    } catch (error) {
+      logger.error('Failed to list conversations', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get conversation replies from a specific prospect
+   */
+  public async getConversationReplies(
+    conversationId: string,
+    fromEmail: string,
+    sinceDate: Date
+  ): Promise<any[]> {
+    try {
+      logger.debug(`Getting replies from ${fromEmail} since ${sinceDate.toISOString()}`);
+      
+      // Get all messages in the conversation
+      const messages = await this.getConversationMessages(conversationId, { limit: 50 });
+      
+      // Filter for messages from the specific email address since the given date
+      const replies = messages.filter(message => {
+        // Check if message is from the prospect email
+        const messageFrom = message.from?.address || message.author?.email;
+        const isFromProspect = messageFrom?.toLowerCase() === fromEmail.toLowerCase();
+        
+        // Check if message is after the sent date
+        const messageDate = new Date(message.delivered_at || message.created_at);
+        const isAfterSentDate = messageDate >= sinceDate;
+        
+        // Check if this is a reply (not the original message)
+        const isReply = message.in_reply_to && message.in_reply_to.length > 0;
+        
+        return isFromProspect && isAfterSentDate && isReply;
+      });
+      
+      logger.debug(`Found ${replies.length} replies from ${fromEmail}`);
+      return replies;
+      
+    } catch (error) {
+      logger.error(`Failed to get conversation replies: ${conversationId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get messages in a conversation
+   */
+  public async getConversationMessages(conversationId: string, params: {
+    limit?: number;
+    until?: string;
+  } = {}): Promise<any[]> {
+    try {
+      const response = await this.client.get(`/conversations/${conversationId}/messages`, { params });
+      return response.data.messages || [];
+    } catch (error) {
+      logger.error(`Failed to get conversation messages: ${conversationId}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Find conversations by participant email
+   */
+  public async findConversationsByParticipant(
+    email: string,
+    limit: number = 25
+  ): Promise<any[]> {
+    try {
+      // Get recent conversations and filter by participant
+      const conversations = await this.listConversations({ limit });
+      
+      const matchingConversations = conversations.filter(conv => {
+        const participants = conv.participants || [];
+        return participants.some((p: any) => 
+          p.email?.toLowerCase() === email.toLowerCase()
+        );
+      });
+      
+      logger.debug(`Found ${matchingConversations.length} conversations with ${email}`);
+      return matchingConversations;
+      
+    } catch (error) {
+      logger.error(`Failed to find conversations by participant: ${email}`, error);
+      throw error;
     }
   }
 

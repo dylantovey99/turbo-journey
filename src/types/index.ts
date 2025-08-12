@@ -82,6 +82,50 @@ export interface EmailJob {
   missiveDraftId?: string;
   error?: string;
   attempts: number;
+  response?: {
+    text?: string;
+    analysis?: {
+      type: 'positive' | 'negative' | 'neutral' | 'meeting_request' | 'objection' | 'referral' | 'out_of_office' | 'unsubscribe';
+      sentiment: number;
+      quality: number;
+      engagement: number;
+      keywords?: string[];
+      intent?: string;
+      followUpSuggestion?: string;
+    };
+    metadata?: {
+      timestamp?: Date;
+      fromEmail?: string;
+      subject?: string;
+      conversationId?: string;
+    };
+    analyzedAt?: Date;
+  };
+  learning?: {
+    prospectType?: string;
+    emailStyle?: string;
+    responseQuality?: number;
+    insights?: string[];
+    improvementSuggestions?: string[];
+    updatedAt?: Date;
+  };
+  analytics?: {
+    sentAt?: Date;
+    openedAt?: Date;
+    clickedAt?: Date;
+    repliedAt?: Date;
+    opened?: boolean;
+    clicked?: boolean;
+    replied?: boolean;
+    openRate?: number;
+    clickRate?: number;
+    replyRate?: number;
+    subjectLineStyle?: string;
+    psychologicalTriggers?: string[];
+    industry?: string;
+    businessStage?: string;
+    marketPosition?: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }

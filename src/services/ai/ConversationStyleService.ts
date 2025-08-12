@@ -74,6 +74,25 @@ export class ConversationStyleService {
     const businessStage = analysis.businessContext?.growthStage || 'growing';
     const professionalLevel = prospectData.businessIntelligence?.professionalLevel || 'professional';
     
+    // Get insights from previous response patterns for similar prospects
+    const prospectType = this.determineProspectType(prospectData);
+    const responseInsights = this.responseAnalyzer.getInsightsForProspectType(prospectType);
+    
+    let insightsPrompt = '';
+    if (responseInsights.recommendedStyles.length > 0) {
+      insightsPrompt = `
+RESPONSE INSIGHTS FROM SIMILAR PROSPECTS:
+- Most successful styles: ${responseInsights.recommendedStyles
+        .slice(0, 3)
+        .map(s => `${s.style} (${Math.round(s.successRate * 100)}% success rate)`)
+        .join(', ')}
+- Content that works: ${responseInsights.contentRecommendations.slice(0, 3).join(', ')}
+- Common challenges to address: ${responseInsights.commonChallenges.slice(0, 3).join(', ')}
+
+Consider these insights when making your recommendation.
+`;
+    }
+    
     const prompt = `Based on this business profile, recommend the most natural conversation approach for professional outreach.
 
 BUSINESS PROFILE:
@@ -82,7 +101,7 @@ BUSINESS PROFILE:
 - Business Stage: ${businessStage}
 - Professional Level: ${professionalLevel}
 - Services: ${prospectData.scrapedData?.services?.slice(0, 3).join(', ') || 'professional services'}
-
+${insightsPrompt}
 STYLE OPTIONS:
 1. Curious Professional - Ask thoughtful questions about their work
 2. Industry Observer - Share relevant industry observations
@@ -94,6 +113,7 @@ Consider:
 - What approach would feel most natural and non-intrusive?
 - What style matches their professional level and industry?
 - What would make them most likely to respond positively?
+- What has worked best for similar prospects based on response data?
 
 Respond with just the number (1-5) of the recommended style.`;
 
@@ -108,10 +128,24 @@ Respond with just the number (1-5) of the recommended style.`;
       const styleIndex = parseInt(response.trim()) - 1;
       const selectedStyle = this.conversationStyles[styleIndex] || this.conversationStyles[0];
 
+      const confidence = responseInsights.recommendedStyles.length > 0 ? 0.9 : 0.8;
+      let reasoning = `Best fit for ${industry} professional at ${businessStage} stage`;
+      
+      if (responseInsights.recommendedStyles.length > 0) {
+        const matchingStyle = responseInsights.recommendedStyles.find(s => 
+          s.style.toLowerCase().includes(selectedStyle.approach) || 
+          selectedStyle.name.toLowerCase().includes(s.style.toLowerCase())
+        );
+        
+        if (matchingStyle) {
+          reasoning += ` - Similar prospects respond well to this style (${Math.round(matchingStyle.successRate * 100)}% success rate)`;
+        }
+      }
+
       return {
         style: selectedStyle,
-        reasoning: `Best fit for ${industry} professional at ${businessStage} stage`,
-        confidence: 0.8
+        reasoning,
+        confidence
       };
     } catch (error) {
       logger.error('Failed to recommend conversation style:', error);
@@ -217,6 +251,28 @@ Respond with just the number (1-5) of the recommended style.`;
     });
 
     return processedText;
+  }
+
+  /**
+   * Determine prospect type for response learning integration
+   */
+  private determineProspectType(prospectData: any): string {
+    const industry = prospectData.industry?.toLowerCase() || '';
+    const services = prospectData.scrapedData?.services || [];
+    
+    if (industry.includes('photography') || services.some((s: string) => s.toLowerCase().includes('photo'))) {
+      if (services.some((s: string) => s.toLowerCase().includes('wedding'))) {
+        return 'wedding_photographer';
+      } else if (services.some((s: string) => s.toLowerCase().includes('portrait'))) {
+        return 'portrait_photographer';
+      } else {
+        return 'photographer_general';
+      }
+    } else if (industry.includes('event') || industry.includes('festival')) {
+      return 'event_organizer';
+    } else {
+      return 'creative_professional';
+    }
   }
 
   public getRandomConversationStarter(industry: string): string {

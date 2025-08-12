@@ -35,21 +35,23 @@ export interface ResponseAnalysis {
 
 export interface LearningModel {
   prospectType: string;
-  successfulStyles: Array<{
+  totalResponses: number;
+  averageQuality: number;
+  stylePerformance: Array<{
     style: string;
     successRate: number;
-    avgResponseQuality: number;
-    sampleSize: number;
+    confidence: number;
+    responseCount: number;
   }>;
-  effectiveContent: Array<{
-    element: string;
-    impact: number;
-    examples: string[];
+  contentRecommendations: Array<{
+    recommendation: string;
+    successRate: number;
+    usageCount: number;
   }>;
-  commonObjections: Array<{
-    objection: string;
+  commonChallenges: Array<{
+    challenge: string;
     frequency: number;
-    effectiveResponses: string[];
+    resolutionRate: number;
   }>;
   lastUpdated: Date;
 }
@@ -81,6 +83,9 @@ export class EmailResponseAnalyzer {
       timestamp: Date;
       fromEmail: string;
       subject: string;
+      conversationId?: string;
+      messageId?: string;
+      webhookSource?: 'webhook' | 'polling';
     }
   ): Promise<ResponseAnalysis> {
     try {
@@ -240,47 +245,79 @@ Focus on business professional context - this is B2B outreach to creative profes
    * Update the learning model with new insights
    */
   private async updateLearningModel(prospectType: string, insight: ResponseInsight): Promise<void> {
-    let model = this.learningModels.get(prospectType) || {
-      prospectType,
-      successfulStyles: [],
-      effectiveContent: [],
-      commonObjections: [],
-      lastUpdated: new Date()
-    };
+    let model = this.learningModels.get(prospectType);
+    
+    if (!model) {
+      // Create new model if it doesn't exist
+      model = this.createEmptyModel(prospectType);
+      this.learningModels.set(prospectType, model);
+    }
 
-    // Update successful styles
-    const styleIndex = model.successfulStyles.findIndex(s => s.style === insight.emailStyle);
+    // Update total responses and average quality
+    model.totalResponses += 1;
+    model.averageQuality = ((model.averageQuality * (model.totalResponses - 1)) + insight.responseQuality) / model.totalResponses;
+
+    // Update style performance
+    const styleIndex = model.stylePerformance.findIndex(s => s.style === insight.emailStyle);
     if (styleIndex >= 0) {
-      const style = model.successfulStyles[styleIndex];
-      const newSampleSize = style.sampleSize + 1;
+      const style = model.stylePerformance[styleIndex];
       const isSuccess = insight.responseQuality > 0.7;
+      const newResponseCount = style.responseCount + 1;
       const newSuccessCount = isSuccess ? 
-        Math.round(style.successRate * style.sampleSize) + 1 :
-        Math.round(style.successRate * style.sampleSize);
+        Math.round(style.successRate * style.responseCount) + 1 :
+        Math.round(style.successRate * style.responseCount);
       
-      style.successRate = newSuccessCount / newSampleSize;
-      style.avgResponseQuality = ((style.avgResponseQuality * style.sampleSize) + insight.responseQuality) / newSampleSize;
-      style.sampleSize = newSampleSize;
+      style.successRate = newSuccessCount / newResponseCount;
+      style.responseCount = newResponseCount;
+      style.confidence = Math.min(style.responseCount / 10, 1);
     } else {
-      model.successfulStyles.push({
+      // Add new style if not found
+      model.stylePerformance.push({
         style: insight.emailStyle,
         successRate: insight.responseQuality > 0.7 ? 1 : 0,
-        avgResponseQuality: insight.responseQuality,
-        sampleSize: 1
+        confidence: 0.1,
+        responseCount: 1
       });
     }
 
-    // Track common objections
+    // Update content recommendations based on insights
+    insight.improvementSuggestions.forEach(suggestion => {
+      const existingIndex = model.contentRecommendations.findIndex(cr => cr.recommendation === suggestion);
+      if (existingIndex >= 0) {
+        model.contentRecommendations[existingIndex].usageCount += 1;
+        if (insight.responseQuality > 0.7) {
+          const cr = model.contentRecommendations[existingIndex];
+          const newSuccessCount = Math.round(cr.successRate * cr.usageCount) + 1;
+          cr.successRate = newSuccessCount / cr.usageCount;
+        }
+      } else {
+        model.contentRecommendations.push({
+          recommendation: suggestion,
+          successRate: insight.responseQuality > 0.7 ? 1 : 0,
+          usageCount: 1
+        });
+      }
+    });
+
+    // Track common challenges/objections
     if (insight.responseType === ResponseType.OBJECTION) {
-      // In a full implementation, we would extract the specific objection
-      // For now, we'll track general objection patterns
+      const challengeIndex = model.commonChallenges.findIndex(cc => cc.challenge === 'Overcoming initial objections');
+      if (challengeIndex >= 0) {
+        model.commonChallenges[challengeIndex].frequency += 1;
+      } else {
+        model.commonChallenges.push({
+          challenge: 'Overcoming initial objections',
+          frequency: 1,
+          resolutionRate: insight.responseQuality > 0.5 ? 1 : 0
+        });
+      }
     }
 
     model.lastUpdated = new Date();
     this.learningModels.set(prospectType, model);
 
-    // Persist to database (in a full implementation)
-    // await this.saveLearningModel(model);
+    // Persist to database
+    await this.saveLearningModel(model);
   }
 
   /**
@@ -293,7 +330,7 @@ Focus on business professional context - this is B2B outreach to creative profes
   } {
     const model = this.learningModels.get(prospectType);
     
-    if (!model || model.successfulStyles.length === 0) {
+    if (!model || model.stylePerformance.length === 0) {
       return {
         recommendedStyles: [],
         contentRecommendations: [
@@ -306,25 +343,25 @@ Focus on business professional context - this is B2B outreach to creative profes
     }
 
     // Sort styles by success rate
-    const recommendedStyles = model.successfulStyles
-      .filter(style => style.sampleSize >= 3) // Only include styles with enough data
+    const recommendedStyles = model.stylePerformance
+      .filter(style => style.responseCount >= 3) // Only include styles with enough data
       .sort((a, b) => b.successRate - a.successRate)
       .slice(0, 3)
       .map(style => ({
         style: style.style,
         successRate: style.successRate,
-        confidence: Math.min(style.sampleSize / 10, 1) // Confidence based on sample size
+        confidence: Math.min(style.responseCount / 10, 1) // Confidence based on response count
       }));
 
-    const contentRecommendations = model.effectiveContent
-      .sort((a, b) => b.impact - a.impact)
+    const contentRecommendations = model.contentRecommendations
+      .sort((a, b) => b.successRate - a.successRate)
       .slice(0, 5)
-      .map(content => content.element);
+      .map(content => content.recommendation);
 
-    const commonChallenges = model.commonObjections
+    const commonChallenges = model.commonChallenges
       .sort((a, b) => b.frequency - a.frequency)
       .slice(0, 3)
-      .map(objection => objection.objection);
+      .map(challenge => challenge.challenge);
 
     return {
       recommendedStyles,
@@ -477,13 +514,129 @@ Focus on business professional context - this is B2B outreach to creative profes
     return null;
   }
 
+  /**
+   * Load learning models from database
+   */
   private async loadLearningModels(): Promise<void> {
-    // In a full implementation, load from database
-    // For now, initialize empty
+    try {
+      const { LearningModelModel } = await import('@/models');
+      
+      const models = await LearningModelModel.find({});
+      
+      this.learningModels.clear();
+      
+      for (const dbModel of models) {
+        const learningModel: LearningModel = {
+          prospectType: dbModel.prospectType,
+          totalResponses: dbModel.totalResponses,
+          averageQuality: dbModel.averageQuality,
+          stylePerformance: dbModel.stylePerformance.map(sp => ({
+            style: sp.style,
+            successRate: sp.successRate,
+            confidence: sp.confidence,
+            responseCount: sp.responseCount
+          })),
+          contentRecommendations: dbModel.contentRecommendations.map(cr => ({
+            recommendation: cr.recommendation,
+            successRate: cr.successRate,
+            usageCount: cr.usageCount
+          })),
+          commonChallenges: dbModel.commonChallenges.map(cc => ({
+            challenge: cc.challenge,
+            frequency: cc.frequency,
+            resolutionRate: cc.resolutionRate
+          })),
+          lastUpdated: dbModel.lastUpdated
+        };
+        
+        this.learningModels.set(dbModel.prospectType, learningModel);
+      }
+      
+      logger.info(`Loaded ${models.length} learning models from database`);
+      
+    } catch (error) {
+      logger.error('Failed to load learning models from database', error);
+      // Initialize with empty models if database fails
+      this.initializeEmptyModels();
+    }
   }
 
+  /**
+   * Save learning model to database
+   */
   private async saveLearningModel(model: LearningModel): Promise<void> {
-    // In a full implementation, persist to database
-    // For now, just keep in memory
+    try {
+      const { LearningModelModel } = await import('@/models');
+      
+      const dbModel = {
+        prospectType: model.prospectType,
+        totalResponses: model.totalResponses,
+        averageQuality: model.averageQuality,
+        stylePerformance: model.stylePerformance,
+        contentRecommendations: model.contentRecommendations,
+        commonChallenges: model.commonChallenges,
+        lastUpdated: new Date()
+      };
+      
+      await LearningModelModel.findOneAndUpdate(
+        { prospectType: model.prospectType },
+        dbModel,
+        { upsert: true, new: true }
+      );
+      
+      logger.debug(`Saved learning model for prospect type: ${model.prospectType}`);
+      
+    } catch (error) {
+      logger.error(`Failed to save learning model for ${model.prospectType}`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Initialize empty models for known prospect types
+   */
+  private initializeEmptyModels(): void {
+    const prospectTypes = [
+      'photographer_general',
+      'wedding_photographer', 
+      'portrait_photographer',
+      'event_organizer',
+      'creative_professional'
+    ];
+    
+    for (const type of prospectTypes) {
+      if (!this.learningModels.has(type)) {
+        this.learningModels.set(type, this.createEmptyModel(type));
+      }
+    }
+  }
+
+  /**
+   * Create empty learning model for a prospect type
+   */
+  private createEmptyModel(prospectType: string): LearningModel {
+    return {
+      prospectType,
+      totalResponses: 0,
+      averageQuality: 0,
+      stylePerformance: [
+        { style: 'curious', successRate: 0, confidence: 0, responseCount: 0 },
+        { style: 'helpful', successRate: 0, confidence: 0, responseCount: 0 },
+        { style: 'collaborative', successRate: 0, confidence: 0, responseCount: 0 },
+        { style: 'observational', successRate: 0, confidence: 0, responseCount: 0 },
+        { style: 'industry-peer', successRate: 0, confidence: 0, responseCount: 0 }
+      ],
+      contentRecommendations: [
+        { recommendation: 'Focus on genuine business conversation', successRate: 0, usageCount: 0 },
+        { recommendation: 'Reference specific business challenges', successRate: 0, usageCount: 0 },
+        { recommendation: 'Offer value-based insights', successRate: 0, usageCount: 0 }
+      ],
+      commonChallenges: [
+        { challenge: 'Building initial trust and credibility', frequency: 0, resolutionRate: 0 },
+        { challenge: 'Standing out from other vendors', frequency: 0, resolutionRate: 0 },
+        { challenge: 'Demonstrating relevant value', frequency: 0, resolutionRate: 0 }
+      ],
+      lastUpdated: new Date()
+    };
   }
 }

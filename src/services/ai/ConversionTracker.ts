@@ -1,4 +1,5 @@
 import { logger } from '@/utils/logger';
+import { EmailResponseAnalyzer } from './EmailResponseAnalyzer';
 
 export interface ConversionMetrics {
   emailId: string;
@@ -101,10 +102,12 @@ export interface A_BTestResult {
 
 export class ConversionTracker {
   private static instance: ConversionTracker;
-  private conversionData: Map<string, ConversionMetrics> = new Map();
+  private responseAnalyzer: EmailResponseAnalyzer;
   private activeABTests: Map<string, A_BTestResult> = new Map();
 
-  private constructor() {}
+  private constructor() {
+    this.responseAnalyzer = EmailResponseAnalyzer.getInstance();
+  }
 
   public static getInstance(): ConversionTracker {
     if (!ConversionTracker.instance) {
@@ -116,7 +119,7 @@ export class ConversionTracker {
   /**
    * Track email send event
    */
-  public trackEmailSent(
+  public async trackEmailSent(
     emailId: string,
     prospectId: string,
     campaignId: string,
@@ -130,113 +133,213 @@ export class ConversionTracker {
       businessStage: string;
       professionalLevel: string;
     }
-  ): void {
-    const now = new Date();
-    const metrics: ConversionMetrics = {
-      emailId,
-      prospectId,
-      campaignId,
-      sent: true,
-      sentAt: now,
-      opened: false,
-      clicked: false,
-      replied: false,
-      ...emailData,
-      sendTime: now,
-      dayOfWeek: now.getDay(),
-      hourOfDay: now.getHours()
-    };
+  ): Promise<void> {
+    try {
+      const { ConversionMetricsModel } = await import('@/models');
+      
+      const now = new Date();
+      const metrics = {
+        emailId,
+        prospectId,
+        campaignId,
+        sent: true,
+        sentAt: now,
+        opened: false,
+        clicked: false,
+        replied: false,
+        ...emailData,
+        sendTime: now,
+        dayOfWeek: now.getDay(),
+        hourOfDay: now.getHours()
+      };
 
-    this.conversionData.set(emailId, metrics);
-    logger.info('Email send tracked', { emailId, prospectId, campaignId });
+      await ConversionMetricsModel.create(metrics);
+      logger.info('Email send tracked to database', { emailId, prospectId, campaignId });
+      
+    } catch (error) {
+      logger.error('Failed to track email send', { emailId, error });
+      throw error;
+    }
   }
 
   /**
    * Track email open event
    */
-  public trackEmailOpened(emailId: string): void {
-    const metrics = this.conversionData.get(emailId);
-    if (metrics && !metrics.opened) {
-      metrics.opened = true;
-      metrics.openedAt = new Date();
-      this.conversionData.set(emailId, metrics);
-      logger.info('Email open tracked', { emailId });
+  public async trackEmailOpened(emailId: string): Promise<void> {
+    try {
+      const { ConversionMetricsModel } = await import('@/models');
+      
+      const result = await ConversionMetricsModel.findOneAndUpdate(
+        { emailId, opened: false },
+        { 
+          opened: true, 
+          openedAt: new Date() 
+        },
+        { new: true }
+      );
+      
+      if (result) {
+        logger.info('Email open tracked to database', { emailId });
+      }
+    } catch (error) {
+      logger.error('Failed to track email open', { emailId, error });
     }
   }
 
   /**
    * Track email click event
    */
-  public trackEmailClicked(emailId: string): void {
-    const metrics = this.conversionData.get(emailId);
-    if (metrics && !metrics.clicked) {
-      metrics.clicked = true;
-      metrics.clickedAt = new Date();
-      this.conversionData.set(emailId, metrics);
-      logger.info('Email click tracked', { emailId });
+  public async trackEmailClicked(emailId: string): Promise<void> {
+    try {
+      const { ConversionMetricsModel } = await import('@/models');
+      
+      const result = await ConversionMetricsModel.findOneAndUpdate(
+        { emailId, clicked: false },
+        { 
+          clicked: true, 
+          clickedAt: new Date() 
+        },
+        { new: true }
+      );
+      
+      if (result) {
+        logger.info('Email click tracked to database', { emailId });
+      }
+    } catch (error) {
+      logger.error('Failed to track email click', { emailId, error });
     }
   }
 
   /**
    * Track email reply event
    */
-  public trackEmailReplied(emailId: string): void {
-    const metrics = this.conversionData.get(emailId);
-    if (metrics && !metrics.replied) {
-      metrics.replied = true;
-      metrics.repliedAt = new Date();
-      this.conversionData.set(emailId, metrics);
-      logger.info('Email reply tracked', { emailId });
+  public async trackEmailReplied(emailId: string): Promise<void> {
+    try {
+      const { ConversionMetricsModel } = await import('@/models');
+      
+      const result = await ConversionMetricsModel.findOneAndUpdate(
+        { emailId, replied: false },
+        { 
+          replied: true, 
+          repliedAt: new Date() 
+        },
+        { new: true }
+      );
+      
+      if (result) {
+        logger.info('Email reply tracked to database', { emailId });
+      }
+    } catch (error) {
+      logger.error('Failed to track email reply', { emailId, error });
+    }
+  }
+
+  /**
+   * Track response with quality analysis from EmailResponseAnalyzer
+   */
+  public async trackResponseWithAnalysis(
+    emailId: string,
+    responseText: string,
+    responseMetadata: { timestamp: Date; fromEmail: string; subject: string; }
+  ): Promise<void> {
+    try {
+      const { ConversionMetricsModel } = await import('@/models');
+      
+      // First track the basic reply event
+      await this.trackEmailReplied(emailId);
+      
+      // Then enhance with response analysis
+      const analysis = await this.responseAnalyzer.analyzeResponse(
+        emailId,
+        responseText,
+        responseMetadata
+      );
+      
+      // Store response analysis data in database
+      await ConversionMetricsModel.findOneAndUpdate(
+        { emailId },
+        {
+          responseAnalysis: {
+            type: analysis.type,
+            sentiment: analysis.sentiment,
+            quality: analysis.quality,
+            engagement: analysis.engagement,
+            keywords: analysis.keywords,
+            intent: analysis.intent
+          }
+        },
+        { new: true }
+      );
+      
+      logger.info('Response tracked with quality analysis to database', { 
+        emailId, 
+        responseType: analysis.type,
+        quality: analysis.quality 
+      });
+      
+    } catch (error) {
+      logger.error('Failed to track response with analysis', { emailId, error });
+      throw error;
     }
   }
 
   /**
    * Generate comprehensive conversion insights
    */
-  public generateInsights(
+  public async generateInsights(
     timeRange?: { start: Date; end: Date },
     filters?: {
       industry?: string;
       campaignId?: string;
       professionalLevel?: string;
     }
-  ): ConversionInsights {
-    let metrics = Array.from(this.conversionData.values());
+  ): Promise<ConversionInsights> {
+    try {
+      const { ConversionMetricsModel } = await import('@/models');
+      
+      // Build query filter
+      const query: any = {};
+      
+      if (timeRange) {
+        query.sentAt = { $gte: timeRange.start, $lte: timeRange.end };
+      }
+      
+      if (filters?.industry) {
+        query.industry = filters.industry;
+      }
+      
+      if (filters?.campaignId) {
+        query.campaignId = filters.campaignId;
+      }
+      
+      if (filters?.professionalLevel) {
+        query.professionalLevel = filters.professionalLevel;
+      }
+      
+      // Get metrics from database
+      const metrics = await ConversionMetricsModel.find(query);
 
-    // Apply time range filter
-    if (timeRange) {
-      metrics = metrics.filter(m => 
-        m.sentAt && m.sentAt >= timeRange.start && m.sentAt <= timeRange.end
-      );
+      const insights: ConversionInsights = {
+        overallPerformance: this.calculateOverallPerformance(metrics),
+        byIndustry: this.calculatePerformanceByIndustry(metrics),
+        bySubjectLineStyle: this.calculatePerformanceBySubjectLineStyle(metrics),
+        byPsychologicalTrigger: this.calculatePerformanceByPsychologicalTrigger(metrics),
+        byTiming: this.calculateTimingPerformance(metrics),
+        personalizationImpact: this.calculatePersonalizationImpact(metrics),
+        recommendations: this.generateRecommendations(metrics)
+      };
+
+      logger.info('Conversion insights generated from database', {
+        metricsCount: metrics.length,
+        overallResponseRate: insights.overallPerformance.responseRate
+      });
+
+      return insights;
+      
+    } catch (error) {
+      logger.error('Failed to generate insights from database', error);
+      throw error;
     }
-
-    // Apply other filters
-    if (filters?.industry) {
-      metrics = metrics.filter(m => m.industry === filters.industry);
-    }
-    if (filters?.campaignId) {
-      metrics = metrics.filter(m => m.campaignId === filters.campaignId);
-    }
-    if (filters?.professionalLevel) {
-      metrics = metrics.filter(m => m.professionalLevel === filters.professionalLevel);
-    }
-
-    const insights: ConversionInsights = {
-      overallPerformance: this.calculateOverallPerformance(metrics),
-      byIndustry: this.calculatePerformanceByIndustry(metrics),
-      bySubjectLineStyle: this.calculatePerformanceBySubjectLineStyle(metrics),
-      byPsychologicalTrigger: this.calculatePerformanceByPsychologicalTrigger(metrics),
-      byTiming: this.calculateTimingPerformance(metrics),
-      personalizationImpact: this.calculatePersonalizationImpact(metrics),
-      recommendations: this.generateRecommendations(metrics)
-    };
-
-    logger.info('Conversion insights generated', {
-      metricsCount: metrics.length,
-      overallResponseRate: insights.overallPerformance.responseRate
-    });
-
-    return insights;
   }
 
   /**
@@ -276,17 +379,25 @@ export class ConversionTracker {
   /**
    * Assign email to A/B test variant
    */
-  public assignToABTest(testId: string, emailId: string, variant: 'A' | 'B'): void {
+  public async assignToABTest(testId: string, emailId: string, variant: 'A' | 'B'): Promise<void> {
     const test = this.activeABTests.get(testId);
-    const metrics = this.conversionData.get(emailId);
-
-    if (test && metrics) {
-      if (variant === 'A') {
-        test.variant_A.metrics.push(metrics);
-      } else {
-        test.variant_B.metrics.push(metrics);
+    
+    if (test) {
+      try {
+        const { ConversionMetricsModel } = await import('@/models');
+        const metrics = await ConversionMetricsModel.findOne({ emailId });
+        
+        if (metrics) {
+          if (variant === 'A') {
+            test.variant_A.metrics.push(metrics as any);
+          } else {
+            test.variant_B.metrics.push(metrics as any);
+          }
+          this.activeABTests.set(testId, test);
+        }
+      } catch (error) {
+        logger.error(`Failed to assign email to A/B test: ${testId}`, error);
       }
-      this.activeABTests.set(testId, test);
     }
   }
 
@@ -328,39 +439,52 @@ export class ConversionTracker {
   /**
    * Get optimization recommendations for a specific campaign
    */
-  public getCampaignOptimizationRecommendations(campaignId: string): {
+  public async getCampaignOptimizationRecommendations(campaignId: string): Promise<{
     subjectLineOptimization: string[];
     timingOptimization: string[];
     personalizationOptimization: string[];
     triggerOptimization: string[];
     overallScore: number;
-  } {
-    const campaignMetrics = Array.from(this.conversionData.values())
-      .filter(m => m.campaignId === campaignId);
+  }> {
+    try {
+      const { ConversionMetricsModel } = await import('@/models');
+      
+      const campaignMetrics = await ConversionMetricsModel.find({ campaignId });
 
-    if (campaignMetrics.length === 0) {
+      if (campaignMetrics.length === 0) {
+        return {
+          subjectLineOptimization: ['Insufficient data for recommendations'],
+          timingOptimization: ['Insufficient data for recommendations'],
+          personalizationOptimization: ['Insufficient data for recommendations'],
+          triggerOptimization: ['Insufficient data for recommendations'],
+          overallScore: 0
+        };
+      }
+
+      const currentPerformance = this.calculateOverallPerformance(campaignMetrics);
+      const allMetrics = await ConversionMetricsModel.find({});
+      const benchmarkPerformance = this.calculateOverallPerformance(allMetrics);
+
+      const recommendations = {
+        subjectLineOptimization: this.getSubjectLineRecommendations(campaignMetrics, allMetrics),
+        timingOptimization: this.getTimingRecommendations(campaignMetrics, allMetrics),
+        personalizationOptimization: this.getPersonalizationRecommendations(campaignMetrics, allMetrics),
+        triggerOptimization: this.getTriggerRecommendations(campaignMetrics, allMetrics),
+        overallScore: Math.round((currentPerformance.responseRate / benchmarkPerformance.responseRate) * 100)
+      };
+
+      return recommendations;
+      
+    } catch (error) {
+      logger.error('Failed to get campaign optimization recommendations', error);
       return {
-        subjectLineOptimization: ['Insufficient data for recommendations'],
-        timingOptimization: ['Insufficient data for recommendations'],
-        personalizationOptimization: ['Insufficient data for recommendations'],
-        triggerOptimization: ['Insufficient data for recommendations'],
+        subjectLineOptimization: ['Error generating recommendations'],
+        timingOptimization: ['Error generating recommendations'],
+        personalizationOptimization: ['Error generating recommendations'],
+        triggerOptimization: ['Error generating recommendations'],
         overallScore: 0
       };
     }
-
-    const currentPerformance = this.calculateOverallPerformance(campaignMetrics);
-    const allMetrics = Array.from(this.conversionData.values());
-    const benchmarkPerformance = this.calculateOverallPerformance(allMetrics);
-
-    const recommendations = {
-      subjectLineOptimization: this.getSubjectLineRecommendations(campaignMetrics, allMetrics),
-      timingOptimization: this.getTimingRecommendations(campaignMetrics, allMetrics),
-      personalizationOptimization: this.getPersonalizationRecommendations(campaignMetrics, allMetrics),
-      triggerOptimization: this.getTriggerRecommendations(campaignMetrics, allMetrics),
-      overallScore: Math.round((currentPerformance.responseRate / benchmarkPerformance.responseRate) * 100)
-    };
-
-    return recommendations;
   }
 
   // Private helper methods
@@ -682,6 +806,163 @@ export class ConversionTracker {
     }
 
     return recommendations.length > 0 ? recommendations : ['Psychological trigger usage appears optimal'];
+  }
+
+  /**
+   * Generate insights enhanced with response quality data
+   */
+  public async generateEnhancedInsights(
+    timeRange?: { start: Date; end: Date },
+    filters?: {
+      industry?: string;
+      campaignId?: string;
+      professionalLevel?: string;
+    }
+  ): Promise<ConversionInsights & {
+    responseQualityAnalysis: {
+      averageQuality: number;
+      highQualityResponses: number;
+      commonResponseTypes: Array<{ type: string; count: number; averageQuality: number }>;
+      sentimentBreakdown: { positive: number; neutral: number; negative: number };
+      learningInsights: string[];
+    };
+  }> {
+    try {
+      const { ConversionMetricsModel } = await import('@/models');
+      
+      const baseInsights = await this.generateInsights(timeRange, filters);
+      
+      // Build query for metrics with response analysis
+      const query: any = { responseAnalysis: { $exists: true } };
+      
+      if (timeRange) {
+        query.sentAt = { $gte: timeRange.start, $lte: timeRange.end };
+      }
+      
+      if (filters?.industry) {
+        query.industry = filters.industry;
+      }
+      
+      if (filters?.campaignId) {
+        query.campaignId = filters.campaignId;
+      }
+      
+      if (filters?.professionalLevel) {
+        query.professionalLevel = filters.professionalLevel;
+      }
+      
+      // Get metrics with response analysis from database
+      const metrics = await ConversionMetricsModel.find(query);
+
+      const responseAnalyses = metrics
+        .map(m => (m as any).responseAnalysis)
+        .filter(Boolean);
+
+      // Calculate response quality metrics
+      const averageQuality = responseAnalyses.length > 0
+        ? responseAnalyses.reduce((sum, analysis) => sum + analysis.quality, 0) / responseAnalyses.length
+        : 0;
+
+      const highQualityResponses = responseAnalyses.filter(analysis => analysis.quality > 0.7).length;
+
+      // Response type analysis
+      const responseTypes = responseAnalyses.reduce((types: Record<string, { count: number; totalQuality: number }>, analysis) => {
+        if (!types[analysis.type]) {
+          types[analysis.type] = { count: 0, totalQuality: 0 };
+        }
+        types[analysis.type].count++;
+        types[analysis.type].totalQuality += analysis.quality;
+        return types;
+      }, {});
+
+      const commonResponseTypes = Object.entries(responseTypes)
+        .map(([type, data]) => ({
+          type,
+          count: data.count,
+          averageQuality: data.totalQuality / data.count
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5);
+
+      // Sentiment breakdown
+      const sentimentBreakdown = responseAnalyses.reduce(
+        (sentiment: { positive: number; neutral: number; negative: number }, analysis) => {
+          if (analysis.sentiment > 0.2) sentiment.positive++;
+          else if (analysis.sentiment < -0.2) sentiment.negative++;
+          else sentiment.neutral++;
+          return sentiment;
+        },
+        { positive: 0, neutral: 0, negative: 0 }
+      );
+
+      // Generate learning insights from response patterns
+      const learningInsights = this.generateLearningInsights(metrics);
+
+      return {
+        ...baseInsights,
+        responseQualityAnalysis: {
+          averageQuality: Math.round(averageQuality * 100) / 100,
+          highQualityResponses,
+          commonResponseTypes,
+          sentimentBreakdown,
+          learningInsights
+        }
+      };
+      
+    } catch (error) {
+      logger.error('Failed to generate enhanced insights', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate learning insights from response patterns
+   */
+  private generateLearningInsights(metrics: ConversionMetrics[]): string[] {
+    const insights: string[] = [];
+    
+    // Get response insights from the analyzer
+    const prospectTypes = new Set(
+      metrics.map(m => this.determineProspectType(m))
+    );
+    
+    for (const prospectType of prospectTypes) {
+      const typeInsights = this.responseAnalyzer.getInsightsForProspectType(prospectType);
+      
+      if (typeInsights.recommendedStyles.length > 0) {
+        const topStyle = typeInsights.recommendedStyles[0];
+        insights.push(
+          `For ${prospectType.replace('_', ' ')}: ${topStyle.style} style shows ${Math.round(topStyle.successRate * 100)}% success rate`
+        );
+      }
+      
+      if (typeInsights.contentRecommendations.length > 0) {
+        insights.push(
+          `${prospectType.replace('_', ' ')} prospects respond well to: ${typeInsights.contentRecommendations[0]}`
+        );
+      }
+    }
+    
+    return insights;
+  }
+
+  /**
+   * Determine prospect type for learning integration
+   */
+  private determineProspectType(metrics: ConversionMetrics): string {
+    const industry = metrics.industry?.toLowerCase() || '';
+    
+    if (industry.includes('photography')) {
+      return 'photographer_general';
+    } else if (industry.includes('wedding')) {
+      return 'wedding_photographer';
+    } else if (industry.includes('portrait')) {
+      return 'portrait_photographer';
+    } else if (industry.includes('event') || industry.includes('festival')) {
+      return 'event_organizer';
+    } else {
+      return 'creative_professional';
+    }
   }
 
   private groupBy<T>(array: T[], key: keyof T): Record<string, T[]> {
