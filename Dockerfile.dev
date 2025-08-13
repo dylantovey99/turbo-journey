@@ -29,7 +29,7 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 RUN mkdir -p logs uploads
 
 # Expose ports (app and debug)
-EXPOSE 3000 9229
+EXPOSE 3001 9229
 
 # Start the application in development mode
 CMD ["npm", "run", "dev"]

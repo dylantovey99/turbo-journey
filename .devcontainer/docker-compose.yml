@@ -1,47 +1,99 @@
 version: '3.8'
 
 services:
+  # Development application container
   app:
     build:
       context: ..
-      dockerfile: .devcontainer/Dockerfile
+      dockerfile: Dockerfile.dev
+    container_name: email-generator-dev
     volumes:
-      - ../..:/workspaces:cached
-      - node_modules:/workspace/node_modules
+      - ../:/workspace:cached
+      - /workspace/node_modules
+      - /workspace/dist
+    working_dir: /workspace
     command: sleep infinity
-    ports:
-      - "3000:3000"
-      - "3001:3001"
     environment:
       - NODE_ENV=development
-      - MONGODB_URI=mongodb://mongo:27017/email-generator
+      - PORT=3001
+      - MONGODB_URI=mongodb://mongo:27017/email-generator-dev
       - REDIS_URL=redis://redis:6379
-      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
     depends_on:
       - mongo
       - redis
+    networks:
+      - email-generator-dev-network
+    ports:
+      - "3001:3001"
 
+  # MongoDB database for development
   mongo:
-    image: mongo:7.0
+    image: mongo:6.0
+    container_name: email-generator-mongo-dev
     restart: unless-stopped
     ports:
       - "27017:27017"
     environment:
-      MONGO_INITDB_DATABASE: email-generator
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=email-generator-dev
     volumes:
-      - mongo-data:/data/db
+      - mongo-dev-data:/data/db
+      - ../scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - email-generator-dev-network
 
+  # Redis for job queues in development
   redis:
     image: redis:7-alpine
+    container_name: email-generator-redis-dev
     restart: unless-stopped
     ports:
       - "6379:6379"
     command: redis-server --appendonly yes
     volumes:
-      - redis-data:/data
+      - redis-dev-data:/data
+    networks:
+      - email-generator-dev-network
+
+  # MongoDB Express for database management
+  mongo-express:
+    image: mongo-express:latest
+    container_name: email-generator-mongo-express-dev
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=password
+      - ME_CONFIG_MONGODB_URL=mongodb://admin:password@mongo:27017/
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin
+    depends_on:
+      - mongo
+    networks:
+      - email-generator-dev-network
+
+  # Redis Commander for Redis management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: email-generator-redis-commander-dev
+    restart: unless-stopped
+    ports:
+      - "8082:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      - redis
+    networks:
+      - email-generator-dev-network
 
 volumes:
-  node_modules:
-  mongo-data:
-  redis-data:
+  mongo-dev-data:
+    driver: local
+  redis-dev-data:
+    driver: local
+
+networks:
+  email-generator-dev-network:
+    driver: bridge

@@ -5,38 +5,37 @@
   "workspaceFolder": "/workspace",
   "shutdownAction": "stopCompose",
   
-  // Configure tool-specific properties
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "nodeGypDependencies": true,
+      "version": "18"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-vscode.vscode-typescript-next",
+        "esbenp.prettier-vscode",
         "bradlc.vscode-tailwindcss",
         "ms-vscode.vscode-json",
-        "esbenp.prettier-vscode",
-        "ms-vscode.vscode-eslint",
-        "mongodb.mongodb-vscode",
-        "cweijan.vscode-redis-client",
-        "ms-vscode.vscode-node-azure-pack"
+        "GitHub.copilot",
+        "ms-playwright.playwright",
+        "ms-vscode.test-adapter-converter"
       ],
       "settings": {
-        "typescript.preferences.importModuleSpecifier": "relative",
+        "typescript.preferences.quotestyle": "single",
         "editor.formatOnSave": true,
-        "editor.defaultFormatter": "esbenp.prettier-vscode",
-        "eslint.workingDirectories": ["./"],
-        "typescript.updateImportsOnFileMove.enabled": "always"
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
       }
     }
   },
 
-  // Use 'forwardPorts' to make a list of ports available locally
-  "forwardPorts": [3000, 3001, 27017, 6379],
+  "forwardPorts": [3001, 27017, 6379, 8081, 8082],
   "portsAttributes": {
-    "3000": {
-      "label": "Application",
-      "onAutoForward": "notify"
-    },
     "3001": {
-      "label": "Application Dev",
+      "label": "Application",
       "onAutoForward": "notify"
     },
     "27017": {
@@ -44,24 +43,15 @@
     },
     "6379": {
       "label": "Redis"
+    },
+    "8081": {
+      "label": "MongoDB Express"
+    },
+    "8082": {
+      "label": "Redis Commander"
     }
   },
 
-  // Use 'postCreateCommand' to run commands after the container is created
-  "postCreateCommand": "bash .devcontainer/setup.sh",
-
-  // Configure container user
-  "remoteUser": "node",
-  
-  // Set container environment variables
-  "containerEnv": {
-    "NODE_ENV": "development",
-    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true",
-    "PUPPETEER_EXECUTABLE_PATH": "/usr/bin/chromium-browser"
-  },
-
-  // Configure lifecycle scripts
-  "onCreateCommand": "npm ci",
-  "postStartCommand": "npm run build",
-  "postAttachCommand": "echo 'Welcome to Personalized Email Generator development environment!'"
+  "postCreateCommand": "npm install",
+  "postStartCommand": "npm run setup:env"
 }
