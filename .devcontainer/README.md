@@ -5,7 +5,7 @@ This devcontainer configuration provides a streamlined, reliable development env
 ## What's Included
 
 ### 🛠️ Development Tools
-- **Node.js 18** with npm and development dependencies
+- **Node.js 20** with npm and development dependencies
 - **GitHub CLI** for repository management
 - **VS Code extensions** for TypeScript, Prettier, and testing
 - **Chromium browser** for Puppeteer web scraping

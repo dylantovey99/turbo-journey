@@ -44,6 +44,7 @@
     }
   },
 
-  "postCreateCommand": "npm install",
-  "postStartCommand": "bash .devcontainer/startup.sh && npm run setup:env"
+  "postCreateCommand": "sudo chown -R node:node /workspace && npm install",
+  "postStartCommand": "bash .devcontainer/startup.sh && npm run setup:env",
+  "remoteUser": "node"
 }

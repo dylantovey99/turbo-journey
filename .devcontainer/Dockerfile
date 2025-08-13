@@ -1,5 +1,5 @@
 # Optimized GitHub Codespaces Development Container
-FROM mcr.microsoft.com/devcontainers/javascript-node:18-bullseye
+FROM mcr.microsoft.com/devcontainers/javascript-node:20-bullseye
 
 # Install system dependencies for Puppeteer, MongoDB, and Redis
 RUN apt-get update && apt-get install -y \
@@ -56,17 +56,10 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
 # Create application directory
 WORKDIR /workspace
 
-# Copy package files for dependency installation
-COPY package*.json ./
+# Ensure proper permissions for workspace
+RUN chown -R node:node /workspace
 
-# Install Node.js dependencies
-RUN npm install
-
-# Create required directories
-RUN mkdir -p logs uploads && \
-    chown -R node:node logs uploads
-
-# Switch to node user for security
+# Switch to node user for development
 USER node
 
 # Expose application port
