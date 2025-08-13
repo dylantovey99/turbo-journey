@@ -1,6 +1,6 @@
 # GitHub Codespaces Development Environment
 
-This devcontainer configuration provides a complete development environment for the Personalized Email Generator project.
+This devcontainer configuration provides a streamlined, reliable development environment for the Personalized Email Generator project using a single-container approach optimized for Codespaces.
 
 ## What's Included
 
@@ -8,17 +8,16 @@ This devcontainer configuration provides a complete development environment for 
 - **Node.js 18** with npm and development dependencies
 - **GitHub CLI** for repository management
 - **VS Code extensions** for TypeScript, Prettier, and testing
+- **Chromium browser** for Puppeteer web scraping
 
-### 🗄️ Database Services
-- **MongoDB 6.0** with MongoDB Express web interface (port 8081)
-- **Redis 7** with Redis Commander web interface (port 8082)
+### 🗄️ Database Services (via Codespaces Features)
+- **MongoDB 6.0** running on localhost:27017
+- **Redis 7** running on localhost:6379
 
 ### 🔌 Port Forwarding
 - **3001**: Main application
 - **27017**: MongoDB database
 - **6379**: Redis cache
-- **8081**: MongoDB Express (admin/admin)
-- **8082**: Redis Commander
 
 ## Getting Started
 
@@ -51,21 +50,22 @@ npm run lint
 
 ## Database Access
 
-### MongoDB Express
-- URL: `http://localhost:8081`
-- Username: `admin`
-- Password: `admin`
+### MongoDB
+- **Connection**: `mongodb://localhost:27017/email-generator-dev`
+- **CLI Access**: Use `mongosh` command in terminal
+- **GUI Access**: Use VS Code MongoDB extension or external client
 
-### Redis Commander  
-- URL: `http://localhost:8082`
-- No authentication required
+### Redis
+- **Connection**: `redis://localhost:6379`
+- **CLI Access**: Use `redis-cli` command in terminal
+- **GUI Access**: Use VS Code Redis extension or external client
 
 ## Environment Configuration
 
 The devcontainer automatically uses `.env.codespaces` for configuration. Key variables:
 
-- `MONGODB_URI`: `mongodb://mongo:27017/email-generator-dev`
-- `REDIS_URL`: `redis://redis:6379`  
+- `MONGODB_URI`: `mongodb://localhost:27017/email-generator-dev`
+- `REDIS_URL`: `redis://localhost:6379`  
 - `PORT`: `3001`
 
 ## Optional API Keys
@@ -84,8 +84,9 @@ MISSIVE_API_TOKEN=your-missive-token
 - Rebuild container: `Cmd/Ctrl + Shift + P` → "Codespaces: Rebuild Container"
 
 ### Database Connection Issues
-- Ensure MongoDB service is running: `docker-compose ps`
-- Check logs: `docker-compose logs mongo`
+- Check MongoDB status: `sudo systemctl status mongodb`
+- Check Redis status: `sudo systemctl status redis`
+- Restart services if needed: `sudo systemctl restart mongodb redis`
 
 ### Application Issues
 - Check environment variables: `npm run verify:env`
@@ -94,24 +95,27 @@ MISSIVE_API_TOKEN=your-missive-token
 ## Architecture
 
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Application   │    │     MongoDB     │    │      Redis      │
-│    Port 3001    │◄──►│   Port 27017    │    │   Port 6379     │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │              ┌─────────────────┐    ┌─────────────────┐
-         │              │ MongoDB Express │    │ Redis Commander │
-         │              │   Port 8081     │    │   Port 8082     │
-         │              └─────────────────┘    └─────────────────┘
-         │
-┌─────────────────┐
-│   VS Code IDE   │
-│   Extensions    │
-└─────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                     GitHub Codespaces                   │
+│  ┌─────────────────┐    ┌─────────────────┐            │
+│  │   Application   │    │     MongoDB     │            │
+│  │    Port 3001    │◄──►│ localhost:27017 │            │
+│  └─────────────────┘    └─────────────────┘            │
+│           │                       │                     │
+│           │              ┌─────────────────┐            │
+│           │              │      Redis      │            │
+│           └─────────────►│ localhost:6379  │            │
+│                          └─────────────────┘            │
+│  ┌─────────────────┐                                    │
+│  │   VS Code IDE   │                                    │
+│  │   Extensions    │                                    │
+│  └─────────────────┘                                    │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## Performance Notes
 
-- The devcontainer mounts the workspace with `:cached` for better performance
-- `node_modules` and `dist` are excluded from sync to improve file watching
-- Hot reload is enabled for TypeScript development
+- **Single container approach**: Faster build and startup times
+- **Codespaces features**: Optimized MongoDB and Redis installations
+- **Efficient file mounting**: Direct workspace access without volume complexity
+- **Reduced resource usage**: Better performance in Codespaces environment

@@ -1,61 +1,49 @@
-# Development container for GitHub Codespaces
-FROM node:18-bullseye
+# Optimized GitHub Codespaces Development Container
+FROM mcr.microsoft.com/devcontainers/javascript-node:18-bullseye
 
 # Install system dependencies for Puppeteer and development tools
-RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends \
-        chromium \
-        fonts-liberation \
-        libasound2 \
-        libatk-bridge2.0-0 \
-        libatk1.0-0 \
-        libatspi2.0-0 \
-        libcups2 \
-        libdbus-1-3 \
-        libdrm2 \
-        libgtk-3-0 \
-        libnspr4 \
-        libnss3 \
-        libwayland-client0 \
-        libx11-6 \
-        libx11-xcb1 \
-        libxcb1 \
-        libxcomposite1 \
-        libxdamage1 \
-        libxext6 \
-        libxfixes3 \
-        libxrandr2 \
-        libxss1 \
-        libxtst6 \
-        ca-certificates \
-        git \
-        curl \
-        wget \
-        vim \
-        mongodb-clients \
-        redis-tools \
+RUN apt-get update && apt-get install -y \
+    chromium \
+    chromium-sandbox \
+    fonts-liberation \
+    libappindicator3-1 \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcairo-gobject2 \
+    libdrm2 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libxss1 \
+    libxtst6 \
+    xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up workspace
+# Set environment variables for Puppeteer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
+    NODE_ENV=development
+
+# Create application directory
 WORKDIR /workspace
 
-# Configure git for container
-RUN git config --global --add safe.directory /workspace
+# Copy package files for dependency installation
+COPY package*.json ./
 
-# Set environment variables
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-ENV NODE_ENV=development
+# Install Node.js dependencies
+RUN npm install
 
-# Create node user for development
-RUN groupadd --gid 1000 node \
-    && useradd --uid 1000 --gid node --shell /bin/bash --create-home node
+# Create required directories
+RUN mkdir -p logs uploads && \
+    chown -R node:node logs uploads
 
-# Change ownership of workspace
-RUN chown -R node:node /workspace
-
-# Switch to node user
+# Switch to node user for security
 USER node
 
-# Set up shell environment
-RUN echo 'export PATH=$PATH:/workspace/node_modules/.bin' >> ~/.bashrc
+# Expose application port
+EXPOSE 3001

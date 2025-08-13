@@ -1,16 +1,20 @@
 {
   "name": "Personalized Email Generator",
-  "dockerComposeFile": "docker-compose.yml",
-  "service": "app",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
   "workspaceFolder": "/workspace",
-  "shutdownAction": "stopCompose",
+  "shutdownAction": "none",
   
   "features": {
-    "ghcr.io/devcontainers/features/node:1": {
-      "nodeGypDependencies": true,
-      "version": "18"
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers-contrib/features/mongodb:1": {
+      "version": "6.0"
     },
-    "ghcr.io/devcontainers/features/github-cli:1": {}
+    "ghcr.io/devcontainers-contrib/features/redis:1": {
+      "version": "7"
+    }
   },
 
   "customizations": {
@@ -32,7 +36,7 @@
     }
   },
 
-  "forwardPorts": [3001, 27017, 6379, 8081, 8082],
+  "forwardPorts": [3001, 27017, 6379],
   "portsAttributes": {
     "3001": {
       "label": "Application",
@@ -43,12 +47,6 @@
     },
     "6379": {
       "label": "Redis"
-    },
-    "8081": {
-      "label": "MongoDB Express"
-    },
-    "8082": {
-      "label": "Redis Commander"
     }
   },
 
