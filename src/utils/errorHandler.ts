@@ -28,7 +28,8 @@ export const errorHandler = (
   error: APIError,
   req: Request,
   res: Response,
-  next: NextFunction
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _next: NextFunction
 ): void => {
   const statusCode = error.statusCode || 500;
   const isOperational = error.isOperational !== false;
@@ -53,7 +54,16 @@ export const errorHandler = (
   });
 
   // Prepare error response
-  const errorResponse: any = {
+  const errorResponse: {
+    success: false;
+    error: string;
+    message: string;
+    stack?: string;
+    details?: {
+      statusCode: number;
+      isOperational: boolean;
+    };
+  } = {
     success: false,
     error: getErrorType(statusCode),
     message: error.message
@@ -71,7 +81,7 @@ export const errorHandler = (
   res.status(statusCode).json(errorResponse);
 };
 
-export const asyncHandler = (fn: Function) => {
+export const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<void | Response>) => {
   return (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
@@ -82,9 +92,9 @@ export const notFoundHandler = (req: Request, res: Response, next: NextFunction)
   next(error);
 };
 
-export const validationErrorHandler = (error: any): AppError => {
+export const validationErrorHandler = (error: Error & { name?: string; errors?: Record<string, { message: string }>; path?: string; value?: string; code?: number; keyValue?: Record<string, unknown> }): AppError => {
   if (error.name === 'ValidationError') {
-    const messages = Object.values(error.errors).map((err: any) => err.message);
+    const messages = Object.values(error.errors || {}).map((err) => err.message);
     return new AppError(`Validation Error: ${messages.join(', ')}`, 400);
   }
   
@@ -93,7 +103,7 @@ export const validationErrorHandler = (error: any): AppError => {
   }
   
   if (error.code === 11000) {
-    const field = Object.keys(error.keyValue)[0];
+    const field = Object.keys(error.keyValue || {})[0];
     return new AppError(`Duplicate field value: ${field}`, 400);
   }
   
@@ -137,10 +147,10 @@ export const setupGlobalErrorHandlers = (): void => {
     process.exit(1);
   });
 
-  process.on('unhandledRejection', (reason: any, promise: Promise<any>) => {
+  process.on('unhandledRejection', (reason: Error | string | unknown, promise: Promise<unknown>) => {
     logger.error('Unhandled Rejection:', {
-      reason: reason?.message || reason,
-      stack: reason?.stack,
+      reason: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
       promise
     });
     

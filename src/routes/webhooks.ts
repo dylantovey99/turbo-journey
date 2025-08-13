@@ -8,7 +8,7 @@ const router = Router();
 /**
  * Middleware to verify webhook signature
  */
-function verifyWebhookSignature(req: Request, res: Response, next: Function) {
+function verifyWebhookSignature(req: Request, res: Response, next: () => void): void | Response {
   const signature = req.headers['x-missive-signature'] as string;
   const webhookSecret = config.missive.webhookSecret;
 
@@ -31,7 +31,7 @@ function verifyWebhookSignature(req: Request, res: Response, next: Function) {
 /**
  * Middleware to parse webhook payload as text for signature verification
  */
-function parseWebhookPayload(req: Request, res: Response, next: Function) {
+function parseWebhookPayload(req: Request, res: Response, next: () => void): void {
   let rawBody = '';
 
   req.on('data', (chunk) => {
@@ -45,7 +45,8 @@ function parseWebhookPayload(req: Request, res: Response, next: Function) {
       next();
     } catch (error) {
       logger.error('Failed to parse webhook payload', error);
-      return res.status(400).json({ error: 'Invalid JSON payload' });
+      res.status(400).json({ error: 'Invalid JSON payload' });
+      return;
     }
   });
 }
@@ -115,7 +116,7 @@ router.get('/missive/health', (req: Request, res: Response) => {
 /**
  * Test webhook endpoint (for development/testing)
  */
-router.post('/missive/test', async (req: Request, res: Response) => {
+router.post('/missive/test', async (req: Request, res: Response): Promise<Response | void> => {
   if (process.env.NODE_ENV === 'production') {
     return res.status(404).json({ error: 'Test endpoint not available in production' });
   }
@@ -173,6 +174,15 @@ router.post('/missive/monitor-responses', async (req: Request, res: Response) =>
   try {
     const { lookbackDays = 7, emailJobId } = req.body;
 
+    // Validate lookbackDays parameter
+    if (lookbackDays && (typeof lookbackDays !== 'number' || lookbackDays < 1 || lookbackDays > 30)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid lookbackDays parameter. Must be a number between 1 and 30.',
+        timestamp: new Date().toISOString()
+      });
+    }
+
     const responseMonitor = MissiveResponseMonitor.getInstance();
 
     if (emailJobId) {
@@ -185,13 +195,14 @@ router.post('/missive/monitor-responses', async (req: Request, res: Response) =>
         timestamp: new Date().toISOString()
       });
     } else {
-      // Trigger general response monitoring
-      const stats = await responseMonitor.getMonitoringStats();
+      // Trigger general response monitoring with lookback period
+      const stats = await responseMonitor.getMonitoringStats(lookbackDays);
       
       res.status(200).json({
         success: true,
-        message: 'Response monitoring stats retrieved',
+        message: `Response monitoring stats retrieved for ${lookbackDays} days`,
         stats,
+        lookbackDays,
         timestamp: new Date().toISOString()
       });
     }

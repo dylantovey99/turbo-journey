@@ -1,8 +1,9 @@
-import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteer, { Browser, Page } from 'puppeteer-core';
 import { config } from '@/config';
 import { logger } from '@/utils/logger';
 import { ScrapedData, ContactInfo } from '@/types';
 import * as cheerio from 'cheerio';
+import axios from 'axios';
 
 export enum ScrapingErrorType {
   TIMEOUT = 'timeout',
@@ -37,22 +38,13 @@ export class WebScraper {
     if (this.isInitialized) return;
 
     try {
-      // Try to launch Puppeteer with better resource management
+      const browserConfig = await this.detectBrowserConfiguration();
+      
       this.browser = await puppeteer.launch({
-        headless: 'new',
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu',
-          '--memory-pressure-off',
-          '--disable-background-timer-throttling',
-          '--disable-backgrounding-occluded-windows',
-          '--disable-renderer-backgrounding'
-        ],
+        headless: true,
+        args: browserConfig.args,
+        executablePath: browserConfig.executablePath,
+        timeout: config.scraping.timeout
       });
 
       // Set up process exit handlers for cleanup
@@ -61,12 +53,136 @@ export class WebScraper {
       process.on('uncaughtException', () => this.gracefulShutdown());
       
       this.isInitialized = true;
-      logger.info('WebScraper initialized successfully with Puppeteer');
+      logger.info('WebScraper initialized successfully', {
+        executablePath: browserConfig.executablePath,
+        platform: browserConfig.platform,
+        isCloudDeployment: config.server.isCloudDeployment
+      });
     } catch (error) {
-      logger.warn('Failed to initialize Puppeteer, falling back to HTTP scraping:', error);
-      // Set as initialized anyway - we'll use HTTP fallback
-      this.isInitialized = true;
-      this.browser = null;
+      logger.error('Failed to initialize Puppeteer browser:', error);
+      
+      // Try HTTP fallback verification
+      const httpTestResult = await this.testHttpFallback();
+      if (httpTestResult.success) {
+        logger.info('HTTP fallback verified, will use for scraping');
+        this.isInitialized = true;
+        this.browser = null;
+      } else {
+        logger.error('Both Puppeteer and HTTP fallback failed. Scraping will be unavailable.');
+        throw new Error(`Scraping initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  }
+
+  private async detectBrowserConfiguration(): Promise<{
+    executablePath?: string;
+    args: string[];
+    platform: string;
+  }> {
+    const platform = process.platform;
+    const isCloudDeployment = config.server.isCloudDeployment;
+    
+    // Base arguments for all environments
+    const baseArgs = [
+      '--window-size=1920x1080',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding'
+    ];
+
+    // Cloud deployment arguments
+    const cloudArgs = [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--disable-gpu',
+      '--disable-web-security',
+      '--disable-features=VizDisplayCompositor',
+      '--run-all-compositor-stages-before-draw',
+      '--memory-pressure-off',
+      '--no-first-run',
+      '--no-zygote'
+    ];
+
+    // Try to detect browser executable paths
+    const executablePaths = this.getPossibleExecutablePaths(platform);
+    let executablePath: string | undefined = process.env.PUPPETEER_EXECUTABLE_PATH;
+    
+    // If no explicit path is configured, try to detect
+    if (!executablePath && isCloudDeployment) {
+      for (const path of executablePaths) {
+        if (await this.isExecutableAvailable(path)) {
+          executablePath = path;
+          logger.info(`Detected browser at: ${path}`);
+          break;
+        }
+      }
+      
+      // Fallback to common cloud deployment path
+      if (!executablePath) {
+        executablePath = '/usr/bin/chromium-browser';
+      }
+    }
+
+    return {
+      executablePath,
+      args: isCloudDeployment ? [...baseArgs, ...cloudArgs] : baseArgs,
+      platform
+    };
+  }
+
+  private getPossibleExecutablePaths(platform: string): string[] {
+    const paths: Record<string, string[]> = {
+      linux: [
+        '/usr/bin/chromium-browser',
+        '/usr/bin/chromium',
+        '/usr/bin/google-chrome',
+        '/usr/bin/google-chrome-stable',
+        '/usr/bin/google-chrome-unstable',
+        '/snap/bin/chromium',
+        '/opt/google/chrome/chrome',
+        '/opt/chromium.org/chromium/chromium'
+      ],
+      darwin: [
+        '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+        '/Applications/Chromium.app/Contents/MacOS/Chromium'
+      ],
+      win32: [
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files\\Chromium\\Application\\chrome.exe'
+      ]
+    };
+
+    return paths[platform] || paths.linux; // Default to linux paths
+  }
+
+  private async isExecutableAvailable(path: string): Promise<boolean> {
+    try {
+      const fs = await import('fs/promises');
+      await fs.access(path);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private async testHttpFallback(): Promise<{ success: boolean; error?: string }> {
+    try {
+      const response = await axios.get('https://httpbin.org/get', {
+        timeout: 5000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; WebScraper/1.0)'
+        }
+      });
+      
+      return { success: response.status === 200 };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      };
     }
   }
 
@@ -105,7 +221,7 @@ export class WebScraper {
       });
 
       // Wait a bit for dynamic content to load
-      await page.waitForTimeout(2000);
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Get page content
       const content = await page.content();
@@ -383,7 +499,6 @@ export class WebScraper {
     logger.info('Using HTTP fallback for scraping:', { url, retryCount });
     
     try {
-      const axios = require('axios');
       
       const response = await axios.get(url, {
         timeout: config.scraping.timeout,
@@ -492,7 +607,7 @@ export class WebScraper {
     return headings.slice(0, 10); // Limit to first 10 headings
   }
 
-  private categorizeError(error: any, url: string): ScrapingError {
+  private categorizeError(error: any): ScrapingError {
     const message = error instanceof Error ? error.message : 'Unknown error';
     const statusCode = error.response?.status || error.statusCode;
     
@@ -585,7 +700,7 @@ export class WebScraper {
     return content;
   }
 
-  private extractBusinessIntelligence($: cheerio.Root, url: string): Record<string, any> {
+  private extractBusinessIntelligence($: cheerio.Root): Record<string, any> {
     const intelligence: Record<string, any> = {};
 
     // Company size indicators
@@ -645,7 +760,6 @@ export class WebScraper {
 
   private extractSeasonalIndicators($: cheerio.Root): string[] {
     const indicators: string[] = [];
-    const currentMonth = new Date().getMonth() + 1;
     const pageText = $.html().toLowerCase();
 
     // Seasonal business patterns

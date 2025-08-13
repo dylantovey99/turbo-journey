@@ -21,7 +21,7 @@ jest.mock('@/services/queue/redis', () => ({
   })
 }));
 
-jest.mock('puppeteer', () => ({
+jest.mock('puppeteer-core', () => ({
   launch: jest.fn().mockResolvedValue({
     newPage: jest.fn().mockResolvedValue({
       setUserAgent: jest.fn(),

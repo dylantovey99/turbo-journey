@@ -1,5 +1,4 @@
 import { Queue, Worker, Job } from 'bullmq';
-import { getRedisClient } from './redis';
 import { config } from '@/config';
 import { logger } from '@/utils/logger';
 import { JobStatus } from '@/types';
@@ -147,7 +146,7 @@ export class EmailQueue {
       const missiveService = new MissiveService();
 
       // Generate the email
-      const generatedEmail = await emailGenerator.generateEmail(emailJobId);
+      await emailGenerator.generateEmail(emailJobId);
       
       // Create draft in Missive
       const draftId = await missiveService.createDraftFromEmailJob(emailJobId);

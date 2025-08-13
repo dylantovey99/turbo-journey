@@ -1,9 +1,15 @@
 [build]
 builder = "nixpacks"
+buildCommand = "npm ci && npm run build"
 
 [deploy]
 startCommand = "npm start"
 restartPolicyType = "on_failure"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
 
 [env]
 NODE_ENV = "production"
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
+PUPPETEER_SKIP_DOWNLOAD = "true"
+PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium-browser"

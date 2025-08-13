@@ -1,8 +1,9 @@
 import { connectDatabase } from '@/models/database';
 import { connectRedis } from '@/services/queue';
 import { ScrapingService } from '@/services/scraper';
-import { ProspectModel } from '@/models';
-import { ProspectStatus } from '@/types';
+// Commenting out unused imports for now - may be needed for future worker implementation
+// import { ProspectModel } from '@/models';
+// import { ProspectStatus } from '@/types';
 import { logger } from '@/utils/logger';
 import { setupGlobalErrorHandlers } from '@/utils/errorHandler';
 

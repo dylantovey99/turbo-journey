@@ -11,12 +11,13 @@ export class RedisConnection {
     this.client = createClient({ 
       url: config.redis.url,
       socket: {
+        connectTimeout: config.redis.connectTimeout,
         reconnectStrategy: (retries) => {
-          if (retries > 3) {
+          if (retries > config.redis.maxRetriesPerRequest) {
             logger.error('Redis max reconnection attempts reached');
             return false;
           }
-          return Math.min(retries * 50, 1000);
+          return Math.min(retries * config.redis.retryDelayOnFailover, 5000);
         }
       }
     });
@@ -55,15 +56,33 @@ export class RedisConnection {
     });
   }
 
-  public async connect(): Promise<void> {
-    if (!this.isConnected) {
-      try {
-        await this.client.connect();
-        logger.info('Redis connected successfully');
-      } catch (error) {
-        logger.warn('Failed to connect to Redis, continuing without queue functionality:', error);
-        // Don't throw error - allow server to start without Redis
+  public async connect(retryAttempt: number = 0): Promise<void> {
+    if (this.isConnected) {
+      return;
+    }
+    
+    const maxRetries = config.server.isCloudDeployment ? 10 : 3;
+    const baseDelay = 1000;
+    
+    try {
+      await this.client.connect();
+      logger.info('Redis connected successfully', {
+        isCloudDeployment: config.server.isCloudDeployment,
+        retryAttempt
+      });
+    } catch (error) {
+      logger.error(`Redis connection failed (attempt ${retryAttempt + 1}/${maxRetries + 1}):`, error);
+      
+      if (retryAttempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, retryAttempt); // Exponential backoff
+        logger.info(`Retrying Redis connection in ${delay}ms...`);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.connect(retryAttempt + 1);
       }
+      
+      logger.error('Redis connection failed after all retries. Queue functionality will be unavailable.');
+      throw new Error(`Failed to connect to Redis after ${maxRetries + 1} attempts: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -91,16 +110,17 @@ export class RedisConnection {
 export async function connectRedis(): Promise<void> {
   const redis = RedisConnection.getInstance();
   
-  // Add timeout to prevent hanging
+  // Increased timeout for cloud environments
+  const connectionTimeout = config.server.isCloudDeployment ? 15000 : 10000;
   const timeout = new Promise((_, reject) => 
-    setTimeout(() => reject(new Error('Redis connection timeout')), 5000)
+    setTimeout(() => reject(new Error('Redis connection timeout')), connectionTimeout)
   );
   
   try {
     await Promise.race([redis.connect(), timeout]);
   } catch (error) {
-    logger.warn('Redis connection failed or timed out, continuing without queue functionality:', error);
-    // Continue without Redis - don't throw
+    logger.error('Critical: Redis connection failed completely:', error);
+    throw error; // Don't continue without Redis - this is a deployment issue that needs to be fixed
   }
 }
 

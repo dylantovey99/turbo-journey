@@ -1,5 +1,5 @@
-import mongoose, { Schema, Document } from 'mongoose';
-import { BulkImportJob, BulkImportStatus, BulkImportError } from '@/types';
+import mongoose, { Schema, Document, FilterQuery, UpdateQuery, QueryOptions, CreateOptions } from 'mongoose';
+import { BulkImportStatus, BulkImportError } from '@/types';
 
 export interface BulkImportJobDocument extends Document {
   filename: string;
@@ -66,23 +66,23 @@ export const BulkImportJobModel = {
     return _bulkImportJobModel;
   },
   
-  // Proxy all mongoose model methods and properties
-  find: (filter: any = {}, options?: any) => BulkImportJobModel.model.find(filter, options),
-  findById: (id: any, projection?: any, options?: any) => BulkImportJobModel.model.findById(id, projection, options),
-  findOne: (filter: any = {}, projection?: any, options?: any) => BulkImportJobModel.model.findOne(filter, projection, options),
-  findByIdAndUpdate: (id: any, update: any, options?: any) => BulkImportJobModel.model.findByIdAndUpdate(id, update, options),
-  findOneAndUpdate: (filter: any, update: any, options?: any) => BulkImportJobModel.model.findOneAndUpdate(filter, update, options),
-  findByIdAndDelete: (id: any, options?: any) => BulkImportJobModel.model.findByIdAndDelete(id, options),
-  findOneAndDelete: (filter: any, options?: any) => BulkImportJobModel.model.findOneAndDelete(filter, options),
-  create: (doc: any) => BulkImportJobModel.model.create(doc) as any,
-  insertMany: (docs: any[], options?: any) => BulkImportJobModel.model.insertMany(docs, options),
-  updateOne: (filter: any, update: any, options?: any) => BulkImportJobModel.model.updateOne(filter, update, options),
-  updateMany: (filter: any, update: any, options?: any) => BulkImportJobModel.model.updateMany(filter, update, options),
-  deleteOne: (filter: any, options?: any) => BulkImportJobModel.model.deleteOne(filter, options),
-  deleteMany: (filter: any, options?: any) => BulkImportJobModel.model.deleteMany(filter, options),
-  countDocuments: (filter: any = {}) => BulkImportJobModel.model.countDocuments(filter),
-  aggregate: (pipeline: any[]) => BulkImportJobModel.model.aggregate(pipeline),
-  distinct: (field: string, filter?: any) => BulkImportJobModel.model.distinct(field, filter),
-  exists: (filter: any) => BulkImportJobModel.model.exists(filter),
+  // Proxy all mongoose model methods and properties with proper typing
+  find: (filter: FilterQuery<BulkImportJobDocument> = {}, options?: QueryOptions) => BulkImportJobModel.model.find(filter, options),
+  findById: (id: string, projection?: string | Record<string, unknown>, options?: QueryOptions) => BulkImportJobModel.model.findById(id, projection, options),
+  findOne: (filter: FilterQuery<BulkImportJobDocument> = {}, projection?: string | Record<string, unknown>, options?: QueryOptions) => BulkImportJobModel.model.findOne(filter, projection, options),
+  findByIdAndUpdate: (id: string, update: UpdateQuery<BulkImportJobDocument>, options?: QueryOptions) => BulkImportJobModel.model.findByIdAndUpdate(id, update, options),
+  findOneAndUpdate: (filter: FilterQuery<BulkImportJobDocument>, update: UpdateQuery<BulkImportJobDocument>, options?: QueryOptions) => BulkImportJobModel.model.findOneAndUpdate(filter, update, options),
+  findByIdAndDelete: (id: string, options?: QueryOptions) => BulkImportJobModel.model.findByIdAndDelete(id, options),
+  findOneAndDelete: (filter: FilterQuery<BulkImportJobDocument>, options?: QueryOptions) => BulkImportJobModel.model.findOneAndDelete(filter, options),
+  create: (doc: Partial<BulkImportJobDocument>, options?: CreateOptions) => BulkImportJobModel.model.create(doc, options),
+  insertMany: (docs: Partial<BulkImportJobDocument>[], options?: mongoose.InsertManyOptions) => BulkImportJobModel.model.insertMany(docs, options),
+  updateOne: (filter: FilterQuery<BulkImportJobDocument>, update: UpdateQuery<BulkImportJobDocument>, options?: QueryOptions) => BulkImportJobModel.model.updateOne(filter, update, options),
+  updateMany: (filter: FilterQuery<BulkImportJobDocument>, update: UpdateQuery<BulkImportJobDocument>, options?: QueryOptions) => BulkImportJobModel.model.updateMany(filter, update, options),
+  deleteOne: (filter: FilterQuery<BulkImportJobDocument>, options?: QueryOptions) => BulkImportJobModel.model.deleteOne(filter, options),
+  deleteMany: (filter: FilterQuery<BulkImportJobDocument>, options?: QueryOptions) => BulkImportJobModel.model.deleteMany(filter, options),
+  countDocuments: (filter: FilterQuery<BulkImportJobDocument> = {}) => BulkImportJobModel.model.countDocuments(filter),
+  aggregate: (pipeline: mongoose.PipelineStage[]) => BulkImportJobModel.model.aggregate(pipeline),
+  distinct: (field: string, filter?: FilterQuery<BulkImportJobDocument>) => BulkImportJobModel.model.distinct(field, filter),
+  exists: (filter: FilterQuery<BulkImportJobDocument>) => BulkImportJobModel.model.exists(filter),
   estimatedDocumentCount: () => BulkImportJobModel.model.estimatedDocumentCount(),
 };

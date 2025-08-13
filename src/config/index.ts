@@ -2,18 +2,40 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Environment validation
+const isProduction = process.env.NODE_ENV === 'production';
+const isCloudDeployment = !!(
+  process.env.RAILWAY_ENVIRONMENT || 
+  process.env.VERCEL || 
+  process.env.NETLIFY ||
+  process.env.CODESPACE_NAME ||
+  process.env.RENDER ||
+  process.env.HEROKU_APP_NAME
+);
+
 export const config = {
   server: {
     port: parseInt(process.env.PORT || '3000'),
     nodeEnv: process.env.NODE_ENV || 'development',
+    host: process.env.HOST || '0.0.0.0',
+    isProduction,
+    isCloudDeployment,
   },
   
   database: {
     mongoUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/email-generator',
+    connectTimeoutMS: parseInt(process.env.MONGODB_CONNECT_TIMEOUT || '10000'),
+    serverSelectionTimeoutMS: parseInt(process.env.MONGODB_SERVER_SELECTION_TIMEOUT || '5000'),
+    maxPoolSize: parseInt(process.env.MONGODB_MAX_POOL_SIZE || '10'),
+    retryWrites: process.env.MONGODB_RETRY_WRITES !== 'false',
+    writeConcern: process.env.MONGODB_WRITE_CONCERN || 'majority',
   },
   
   redis: {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
+    connectTimeout: parseInt(process.env.REDIS_CONNECT_TIMEOUT || '10000'),
+    retryDelayOnFailover: parseInt(process.env.REDIS_RETRY_DELAY || '100'),
+    maxRetriesPerRequest: parseInt(process.env.REDIS_MAX_RETRIES || '3'),
   },
   
   missive: {

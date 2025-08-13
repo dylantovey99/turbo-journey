@@ -1,6 +1,7 @@
 import { config } from '@/config';
 import { MissiveClient } from '@/services/missive/MissiveClient';
 import { logger } from '@/utils/logger';
+import mongoose from 'mongoose';
 
 export interface ValidationResult {
   valid: boolean;
@@ -208,7 +209,6 @@ export class ConfigurationValidator {
     } else {
       // Test database connectivity
       try {
-        const mongoose = require('mongoose');
         
         if (mongoose.connection.readyState === 1) {
           results.push({

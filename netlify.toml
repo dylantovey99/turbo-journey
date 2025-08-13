@@ -1,0 +1,41 @@
+[build]
+  base = "."
+  command = "npm ci && npm run build"
+  functions = "netlify/functions"
+  publish = "public"
+  
+[build.environment]
+  NODE_ENV = "production"
+  PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
+  PUPPETEER_SKIP_DOWNLOAD = "true"
+  PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium-browser"
+
+# API routes handled by serverless functions
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api"
+  status = 200
+
+[[redirects]]
+  from = "/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
+# Catch-all for SPA routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[functions]
+  # Increase timeout for AI operations
+  timeout = 60
+  
+[context.production]
+  environment = { NODE_ENV = "production" }
+  
+[context.deploy-preview]
+  environment = { NODE_ENV = "development" }
+  
+[context.branch-deploy]
+  environment = { NODE_ENV = "development" }

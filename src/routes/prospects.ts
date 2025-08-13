@@ -356,7 +356,7 @@ router.post('/bulk/scrape-all', async (req, res) => {
     const { campaignId } = req.body;
 
     // Build query to find unscraped prospects
-    let query: any = {
+    const query: any = {
       status: { $in: ['pending', 'failed'] }
     };
 

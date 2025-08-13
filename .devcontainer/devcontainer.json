@@ -1,0 +1,67 @@
+{
+  "name": "Personalized Email Generator",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  
+  // Configure tool-specific properties
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.vscode-typescript-next",
+        "bradlc.vscode-tailwindcss",
+        "ms-vscode.vscode-json",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-eslint",
+        "mongodb.mongodb-vscode",
+        "cweijan.vscode-redis-client",
+        "ms-vscode.vscode-node-azure-pack"
+      ],
+      "settings": {
+        "typescript.preferences.importModuleSpecifier": "relative",
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "eslint.workingDirectories": ["./"],
+        "typescript.updateImportsOnFileMove.enabled": "always"
+      }
+    }
+  },
+
+  // Use 'forwardPorts' to make a list of ports available locally
+  "forwardPorts": [3000, 3001, 27017, 6379],
+  "portsAttributes": {
+    "3000": {
+      "label": "Application",
+      "onAutoForward": "notify"
+    },
+    "3001": {
+      "label": "Application Dev",
+      "onAutoForward": "notify"
+    },
+    "27017": {
+      "label": "MongoDB"
+    },
+    "6379": {
+      "label": "Redis"
+    }
+  },
+
+  // Use 'postCreateCommand' to run commands after the container is created
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+
+  // Configure container user
+  "remoteUser": "node",
+  
+  // Set container environment variables
+  "containerEnv": {
+    "NODE_ENV": "development",
+    "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD": "true",
+    "PUPPETEER_EXECUTABLE_PATH": "/usr/bin/chromium-browser"
+  },
+
+  // Configure lifecycle scripts
+  "onCreateCommand": "npm ci",
+  "postStartCommand": "npm run build",
+  "postAttachCommand": "echo 'Welcome to Personalized Email Generator development environment!'"
+}

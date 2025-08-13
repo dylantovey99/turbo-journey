@@ -2,7 +2,6 @@ import { MissiveClient, MissiveDraft } from './MissiveClient';
 import { EmailJobModel, ProspectModel } from '@/models';
 import { GeneratedEmail, ProspectStatus } from '@/types';
 import { logger } from '@/utils/logger';
-import { config } from '@/config';
 
 export class MissiveService {
   private client: MissiveClient;

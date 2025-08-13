@@ -1,3 +1,6 @@
+// Register module aliases for production builds - MUST be first import
+import './alias';
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -127,6 +130,20 @@ async function startServer() {
   try {
     // Setup global error handlers
     setupGlobalErrorHandlers();
+    
+    // Validate environment configuration
+    const { validateEnvironment, logValidationResults, getEnvironmentInfo } = await import('@/utils/environmentValidator');
+    const validationResult = validateEnvironment();
+    logValidationResults(validationResult);
+    
+    // Log environment information
+    logger.info('Environment information', getEnvironmentInfo());
+    
+    // Exit if critical validation errors exist
+    if (!validationResult.isValid) {
+      logger.error('Critical environment validation errors detected - server cannot start');
+      process.exit(1);
+    }
     
     await connectDatabase();
     logger.info('Database connected successfully');

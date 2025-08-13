@@ -1,7 +1,7 @@
 import { WebScraper } from '@/services/scraper/WebScraper';
 
 // Mock Puppeteer
-jest.mock('puppeteer', () => ({
+jest.mock('puppeteer-core', () => ({
   launch: jest.fn().mockResolvedValue({
     newPage: jest.fn().mockResolvedValue({
       setUserAgent: jest.fn(),

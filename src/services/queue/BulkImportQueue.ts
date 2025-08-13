@@ -1,5 +1,4 @@
 import { Queue, Worker, Job } from 'bullmq';
-import { getRedisClient } from './redis';
 import { config } from '@/config';
 import { logger } from '@/utils/logger';
 import { BulkImportStatus, ProspectStatus } from '@/types';
