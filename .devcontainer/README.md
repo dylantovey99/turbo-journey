@@ -22,7 +22,11 @@ This devcontainer configuration provides a streamlined, reliable development env
 ## Getting Started
 
 1. **Wait for container to build** - This may take a few minutes on first launch
-2. **Install dependencies** - Run `npm install` if not already done
+2. **Automatic setup** - The initialization script will:
+   - Wait for workspace files to be mounted
+   - Install npm dependencies automatically
+   - Start MongoDB and Redis services
+   - Configure the development environment
 3. **Start development server** - Run `npm run dev`
 4. **Access the application** at the forwarded port 3001
 
