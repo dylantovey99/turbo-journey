@@ -1,27 +1,76 @@
 import { WebScraper } from '@/services/scraper/WebScraper';
 
-// Mock Puppeteer
+// Mock Puppeteer with proper type definitions
+const currentMockPage = {
+  setUserAgent: jest.fn(),
+  setViewport: jest.fn(),
+  goto: jest.fn(),
+  waitForTimeout: jest.fn(),
+  content: jest.fn(),
+  close: jest.fn(),
+  evaluate: jest.fn(),
+  removeAllListeners: jest.fn()
+};
+
+const currentMockBrowser = {
+  newPage: jest.fn().mockResolvedValue(currentMockPage),
+  close: jest.fn(),
+  pages: jest.fn().mockResolvedValue([currentMockPage])
+};
+
+const mockPuppeteer = {
+  launch: jest.fn().mockResolvedValue(currentMockBrowser)
+};
+
 jest.mock('puppeteer-core', () => ({
   launch: jest.fn().mockResolvedValue({
     newPage: jest.fn().mockResolvedValue({
-      setUserAgent: jest.fn(),
-      setViewport: jest.fn(),
-      goto: jest.fn(),
-      waitForTimeout: jest.fn(),
-      content: jest.fn(),
-      close: jest.fn(),
-      evaluate: jest.fn()
+      setUserAgent: jest.fn().mockResolvedValue(undefined),
+      setViewport: jest.fn().mockResolvedValue(undefined),
+      goto: jest.fn().mockResolvedValue(undefined),
+      waitForTimeout: jest.fn().mockResolvedValue(undefined),
+      content: jest.fn().mockResolvedValue('<html><body>Test</body></html>'),
+      close: jest.fn().mockResolvedValue(undefined),
+      evaluate: jest.fn().mockResolvedValue([]),
+      removeAllListeners: jest.fn()
     }),
-    close: jest.fn()
+    close: jest.fn().mockResolvedValue(undefined),
+    pages: jest.fn().mockResolvedValue([])
   })
 }));
 
 describe('WebScraper', () => {
   let webScraper: WebScraper;
+  let puppeteerCore: any;
+  let currentMockBrowser: any;
+  let currentMockPage: any;
 
   beforeEach(() => {
     webScraper = new WebScraper();
+    puppeteerCore = require('puppeteer-core');
+    
+    // Reset mocks and get fresh instances
     jest.clearAllMocks();
+    
+    // Set up fresh mock instances for each test
+    currentMockPage = {
+      setUserAgent: jest.fn().mockResolvedValue(undefined),
+      setViewport: jest.fn().mockResolvedValue(undefined),
+      goto: jest.fn().mockResolvedValue(undefined),
+      waitForTimeout: jest.fn().mockResolvedValue(undefined),
+      content: jest.fn().mockResolvedValue('<html><body>Test</body></html>'),
+      close: jest.fn().mockResolvedValue(undefined),
+      evaluate: jest.fn().mockResolvedValue([]),
+      removeAllListeners: jest.fn()
+    };
+    
+    currentMockBrowser = {
+      newPage: jest.fn().mockResolvedValue(currentMockPage),
+      close: jest.fn().mockResolvedValue(undefined),
+      pages: jest.fn().mockResolvedValue([currentMockPage])
+    };
+    
+    puppeteerCore.launch.mockResolvedValue(currentMockBrowser);
   });
 
   afterEach(async () => {
@@ -34,8 +83,7 @@ describe('WebScraper', () => {
     });
 
     it('should handle initialization errors', async () => {
-      const puppeteer = require('puppeteer');
-      puppeteer.launch.mockRejectedValueOnce(new Error('Launch failed'));
+      puppeteerCore.launch.mockRejectedValueOnce(new Error('Launch failed'));
 
       await expect(webScraper.initialize()).rejects.toThrow('Launch failed');
     });
@@ -65,8 +113,8 @@ describe('WebScraper', () => {
         </html>
       `;
 
-      mockPage.content.mockResolvedValue(htmlContent);
-      mockPage.evaluate.mockResolvedValue([]);
+      currentMockPage.content.mockResolvedValue(htmlContent);
+      currentMockPage.evaluate.mockResolvedValue([]);
 
       const result = await webScraper.scrapeWebsite('https://test-company.com');
 
@@ -79,19 +127,19 @@ describe('WebScraper', () => {
 
     it('should normalize URL correctly', async () => {
       const htmlContent = '<html><body>Test</body></html>';
-      mockPage.content.mockResolvedValue(htmlContent);
-      mockPage.evaluate.mockResolvedValue([]);
+      currentMockPage.content.mockResolvedValue(htmlContent);
+      currentMockPage.evaluate.mockResolvedValue([]);
 
       await webScraper.scrapeWebsite('test-company.com');
 
-      expect(mockPage.goto).toHaveBeenCalledWith(
+      expect(currentMockPage.goto).toHaveBeenCalledWith(
         'https://test-company.com',
         expect.any(Object)
       );
     });
 
     it('should handle scraping errors gracefully', async () => {
-      mockPage.goto.mockRejectedValue(new Error('Navigation failed'));
+      currentMockPage.goto.mockRejectedValue(new Error('Navigation failed'));
 
       await expect(
         webScraper.scrapeWebsite('https://invalid-website.com')
@@ -114,8 +162,8 @@ describe('WebScraper', () => {
         </html>
       `;
 
-      mockPage.content.mockResolvedValue(htmlContent);
-      mockPage.evaluate.mockResolvedValue([]);
+      currentMockPage.content.mockResolvedValue(htmlContent);
+      currentMockPage.evaluate.mockResolvedValue([]);
 
       const result = await webScraper.scrapeWebsite('https://test-company.com');
 
@@ -137,8 +185,8 @@ describe('WebScraper', () => {
         </html>
       `;
 
-      mockPage.content.mockResolvedValue(htmlContent);
-      mockPage.evaluate.mockResolvedValue([]);
+      currentMockPage.content.mockResolvedValue(htmlContent);
+      currentMockPage.evaluate.mockResolvedValue([]);
 
       const result = await webScraper.scrapeWebsite('https://test-company.com');
 
@@ -149,8 +197,8 @@ describe('WebScraper', () => {
     });
 
     it('should extract technologies from page evaluation', async () => {
-      mockPage.content.mockResolvedValue('<html><body>Test</body></html>');
-      mockPage.evaluate.mockResolvedValue(['React', 'Vue.js', 'WordPress']);
+      currentMockPage.content.mockResolvedValue('<html><body>Test</body></html>');
+      currentMockPage.evaluate.mockResolvedValue(['React', 'Vue.js', 'WordPress']);
 
       const result = await webScraper.scrapeWebsite('https://test-company.com');
 
@@ -162,8 +210,8 @@ describe('WebScraper', () => {
     it('should respect rate limiting delay', async () => {
       const startTime = Date.now();
       
-      mockPage.content.mockResolvedValue('<html><body>Test</body></html>');
-      mockPage.evaluate.mockResolvedValue([]);
+      currentMockPage.content.mockResolvedValue('<html><body>Test</body></html>');
+      currentMockPage.evaluate.mockResolvedValue([]);
 
       await webScraper.scrapeWebsite('https://test-company.com');
       
@@ -175,12 +223,12 @@ describe('WebScraper', () => {
     });
 
     it('should close page after scraping', async () => {
-      mockPage.content.mockResolvedValue('<html><body>Test</body></html>');
-      mockPage.evaluate.mockResolvedValue([]);
+      currentMockPage.content.mockResolvedValue('<html><body>Test</body></html>');
+      currentMockPage.evaluate.mockResolvedValue([]);
 
       await webScraper.scrapeWebsite('https://test-company.com');
 
-      expect(mockPage.close).toHaveBeenCalled();
+      expect(currentMockPage.close).toHaveBeenCalled();
     });
   });
 
@@ -190,7 +238,7 @@ describe('WebScraper', () => {
     });
 
     it('should handle timeout errors', async () => {
-      mockPage.goto.mockRejectedValue(new Error('Navigation timeout'));
+      currentMockPage.goto.mockRejectedValue(new Error('Navigation timeout'));
 
       await expect(
         webScraper.scrapeWebsite('https://slow-website.com')
@@ -198,7 +246,7 @@ describe('WebScraper', () => {
     });
 
     it('should handle network errors', async () => {
-      mockPage.goto.mockRejectedValue(new Error('net::ERR_NAME_NOT_RESOLVED'));
+      currentMockPage.goto.mockRejectedValue(new Error('net::ERR_NAME_NOT_RESOLVED'));
 
       await expect(
         webScraper.scrapeWebsite('https://non-existent-domain.com')
@@ -211,7 +259,7 @@ describe('WebScraper', () => {
       await webScraper.initialize();
       await webScraper.close();
 
-      expect(mockBrowser.close).toHaveBeenCalled();
+      expect(currentMockBrowser.close).toHaveBeenCalled();
     });
 
     it('should handle multiple close calls gracefully', async () => {
@@ -219,7 +267,7 @@ describe('WebScraper', () => {
       await webScraper.close();
       await webScraper.close(); // Second close should not throw
 
-      expect(mockBrowser.close).toHaveBeenCalledTimes(1);
+      expect(currentMockBrowser.close).toHaveBeenCalledTimes(1);
     });
   });
 });

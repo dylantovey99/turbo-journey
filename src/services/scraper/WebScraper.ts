@@ -247,7 +247,7 @@ export class WebScraper {
       const recentNews = this.extractRecentNews($);
 
       // Enhanced business intelligence metadata
-      const businessIntelligence = this.extractBusinessIntelligence($, normalizedUrl);
+      const businessIntelligence = this.extractBusinessIntelligence($);
       const growthSignals = this.extractGrowthSignals($);
       const competitiveSignals = this.extractCompetitiveSignals($);
 
@@ -287,7 +287,7 @@ export class WebScraper {
       return scrapedData;
 
     } catch (error) {
-      const scrapingError = this.categorizeError(error, normalizedUrl);
+      const scrapingError = this.categorizeError(error);
       
       logger.error(`Failed to scrape website: ${website}`, {
         error: scrapingError.message,
@@ -564,7 +564,7 @@ export class WebScraper {
       return scrapedData;
       
     } catch (error) {
-      const scrapingError = this.categorizeError(error, url);
+      const scrapingError = this.categorizeError(error);
       
       logger.error('HTTP scraping failed:', { 
         url, 
