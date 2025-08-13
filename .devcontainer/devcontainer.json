@@ -1,12 +1,10 @@
 {
   "name": "Personalized Email Generator",
-  "build": {
-    "dockerfile": "Dockerfile",
-    "context": ".."
-  },
-  "workspaceFolder": "/workspace",
-  "shutdownAction": "none",
-  
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/turbo-journey",
+  "shutdownAction": "stopCompose",
+
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
@@ -20,7 +18,8 @@
         "ms-vscode.vscode-json",
         "GitHub.copilot",
         "ms-playwright.playwright",
-        "ms-vscode.test-adapter-converter"
+        "ms-vscode.test-adapter-converter",
+        "ms-vscode.vscode-mongodb"
       ],
       "settings": {
         "typescript.preferences.quotestyle": "single",
@@ -44,7 +43,6 @@
     }
   },
 
-  "postCreateCommand": "sudo chown -R node:node /workspace",
-  "postStartCommand": "bash .devcontainer/init.sh",
-  "remoteUser": "node"
+  "postCreateCommand": "npm install",
+  "postStartCommand": "npm run setup:env"
 }

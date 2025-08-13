@@ -1,34 +1,31 @@
 # GitHub Codespaces Development Environment
 
-This devcontainer configuration provides a streamlined, reliable development environment for the Personalized Email Generator project using a single-container approach optimized for Codespaces.
+This devcontainer provides a complete, Codespaces-native development environment for the Personalized Email Generator project using Docker Compose services.
 
 ## What's Included
 
 ### 🛠️ Development Tools
 - **Node.js 20** with npm and development dependencies
 - **GitHub CLI** for repository management
-- **VS Code extensions** for TypeScript, Prettier, and testing
-- **Chromium browser** for Puppeteer web scraping
+- **VS Code extensions** for TypeScript, Prettier, testing, and MongoDB
+- **Chromium browser** support for Puppeteer web scraping
 
-### 🗄️ Database Services (Self-Contained)
-- **MongoDB 6.0** installed and auto-started on localhost:27017
-- **Redis 7** installed and auto-started on localhost:6379
+### 🗄️ Database Services
+- **MongoDB 6.0** - Full-featured database with initialization scripts
+- **Redis 7** - High-performance caching and queue management
 
 ### 🔌 Port Forwarding
 - **3001**: Main application
-- **27017**: MongoDB database
+- **27017**: MongoDB database  
 - **6379**: Redis cache
 
 ## Getting Started
 
-1. **Wait for container to build** - This may take a few minutes on first launch
-2. **Automatic setup** - The initialization script will:
-   - Wait for workspace files to be mounted
-   - Install npm dependencies automatically
-   - Start MongoDB and Redis services
-   - Configure the development environment
-3. **Start development server** - Run `npm run dev`
-4. **Access the application** at the forwarded port 3001
+1. **Open in Codespaces** - Container builds automatically
+2. **Wait for setup** - Dependencies install automatically via `postCreateCommand`
+3. **Services ready** - MongoDB and Redis start automatically
+4. **Start development** - Run `npm run dev`
+5. **Access application** - Use forwarded port 3001
 
 ## Development Commands
 
@@ -42,86 +39,99 @@ npm test
 # Build for production
 npm run build
 
-# Setup environment
-npm run setup:env
-
 # Type checking
 npm run typecheck
 
 # Linting
 npm run lint
+
+# Setup environment (runs automatically)
+npm run setup:env
 ```
 
 ## Database Access
 
 ### MongoDB
-- **Connection**: `mongodb://localhost:27017/email-generator-dev`
-- **CLI Access**: Use `mongosh` command in terminal
-- **GUI Access**: Use VS Code MongoDB extension or external client
+- **Connection**: `mongodb://mongodb:27017/email-generator-dev`
+- **Admin User**: `admin` / `password`
+- **VS Code Extension**: Use MongoDB extension for GUI access
+- **CLI Access**: Connect via VS Code terminal using `mongosh`
 
 ### Redis
-- **Connection**: `redis://localhost:6379`
-- **CLI Access**: Use `redis-cli` command in terminal
-- **GUI Access**: Use VS Code Redis extension or external client
+- **Connection**: `redis://redis:6379`
+- **CLI Access**: Use `redis-cli` in terminal
+- **VS Code Extension**: Available for Redis management
 
 ## Environment Configuration
 
-The devcontainer automatically uses `.env.codespaces` for configuration. Key variables:
+The devcontainer uses `.env.codespaces` with Docker Compose service networking:
 
-- `MONGODB_URI`: `mongodb://localhost:27017/email-generator-dev`
-- `REDIS_URL`: `redis://localhost:6379`  
+- `MONGODB_URI`: `mongodb://mongodb:27017/email-generator-dev`
+- `REDIS_URL`: `redis://redis:6379`
 - `PORT`: `3001`
 
-## Optional API Keys
+## API Keys (Optional)
 
-For full functionality, add these to `.env.codespaces`:
+For full functionality, add to `.env.codespaces`:
 
 ```bash
 ANTHROPIC_API_KEY=your-anthropic-key
 MISSIVE_API_TOKEN=your-missive-token
 ```
 
-## Troubleshooting
-
-### Container Build Issues
-- Check Docker logs in VS Code terminal
-- Rebuild container: `Cmd/Ctrl + Shift + P` → "Codespaces: Rebuild Container"
-
-### Database Connection Issues
-- Check MongoDB status: `pgrep mongod`
-- Check Redis status: `pgrep redis-server`
-- Restart services: `bash .devcontainer/startup.sh`
-- View MongoDB logs: `tail -f /var/log/mongodb.log`
-
-### Application Issues
-- Check environment variables: `npm run verify:env`
-- View application logs in terminal running `npm run dev`
-
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                     GitHub Codespaces                   │
+│                                                         │
 │  ┌─────────────────┐    ┌─────────────────┐            │
 │  │   Application   │    │     MongoDB     │            │
-│  │    Port 3001    │◄──►│ localhost:27017 │            │
-│  └─────────────────┘    └─────────────────┘            │
+│  │  (Node.js 20)   │◄──►│   mongodb:27017 │            │
+│  │   Port 3001     │    └─────────────────┘            │
+│  └─────────────────┘              │                     │
 │           │                       │                     │
 │           │              ┌─────────────────┐            │
 │           │              │      Redis      │            │
-│           └─────────────►│ localhost:6379  │            │
+│           └─────────────►│   redis:6379    │            │
 │                          └─────────────────┘            │
 │  ┌─────────────────┐                                    │
 │  │   VS Code IDE   │                                    │
 │  │   Extensions    │                                    │
+│  │   Workspace     │                                    │
 │  └─────────────────┘                                    │
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Performance Notes
+## Service Architecture
 
-- **Single container approach**: Faster build and startup times
-- **Self-contained databases**: MongoDB and Redis installed directly in container
-- **Automatic startup**: Databases start automatically with container
-- **Efficient file mounting**: Direct workspace access without volume complexity
-- **Reduced resource usage**: Better performance in Codespaces environment
+- **Docker Compose**: Orchestrates all services with proper networking
+- **Workspace Mounting**: Repository mounted to `/workspaces/turbo-journey`
+- **Service Networking**: Services communicate via Docker Compose network
+- **Automatic Startup**: All services start together with container
+
+## Troubleshooting
+
+### Container Issues
+- **Rebuild container**: `Cmd/Ctrl + Shift + P` → "Codespaces: Rebuild Container"
+- **Check logs**: View container logs in VS Code terminal
+
+### Database Connection Issues
+- **MongoDB status**: `docker-compose ps` to check service status
+- **Redis status**: All services should show "Up" status
+- **Service logs**: `docker-compose logs mongodb` or `docker-compose logs redis`
+
+### Application Issues
+- **Environment check**: `npm run verify:env`
+- **Service restart**: Restart Codespaces or rebuild container
+- **Port forwarding**: Check VS Code ports panel
+
+## Performance Benefits
+
+- **Native Codespaces integration**: Uses platform conventions and optimizations
+- **Docker Compose orchestration**: Reliable service management and networking
+- **Cached workspace mounting**: Fast file operations and hot reload
+- **Standard base images**: Optimized containers from Microsoft
+- **Automatic service startup**: No manual database management needed
+
+This architecture leverages GitHub Codespaces' strengths while providing a complete, reliable development environment for the email generator project.

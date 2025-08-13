@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # Development application container
+  app:
+    image: mcr.microsoft.com/devcontainers/javascript-node:20-bullseye
+    volumes:
+      - ../..:/workspaces/turbo-journey:cached
+    working_dir: /workspaces/turbo-journey
+    command: sleep infinity
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - MONGODB_URI=mongodb://mongodb:27017/email-generator-dev
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - dev-network
+    # Install Chromium for Puppeteer
+    user: root
+    privileged: false
+
+  # MongoDB database
+  mongodb:
+    image: mongo:6.0
+    container_name: mongodb-dev
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+      - MONGO_INITDB_DATABASE=email-generator-dev
+    volumes:
+      - mongodb-data:/data/db
+      - ../../scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    networks:
+      - dev-network
+
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    container_name: redis-dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    networks:
+      - dev-network
+
+volumes:
+  mongodb-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  dev-network:
+    driver: bridge
