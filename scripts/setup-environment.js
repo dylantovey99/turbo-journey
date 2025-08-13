@@ -121,19 +121,36 @@ function validateEnvironment() {
     'NODE_ENV',
     'PORT',
     'MONGODB_URI',
-    'REDIS_URL',
-    'ANTHROPIC_API_KEY'
+    'REDIS_URL'
+  ];
+  
+  // API keys are optional in development
+  const optionalInDev = [
+    'ANTHROPIC_API_KEY',
+    'MISSIVE_API_TOKEN'
   ];
   
   const missing = requiredVars.filter(varName => !process.env[varName]);
+  const missingOptional = optionalInDev.filter(varName => !process.env[varName]);
   
   if (missing.length > 0) {
     console.log(`⚠️  Missing required environment variables: ${missing.join(', ')}`);
     console.log(`📝 Please set these variables in your deployment platform`);
+    
+    // In development/codespaces, warn but don't fail
+    if (process.env.NODE_ENV === 'development' || process.env.CODESPACES) {
+      console.log(`🔧 Continuing in development mode with limited functionality`);
+      return true;
+    }
     return false;
   }
   
-  console.log(`✅ All required environment variables are set`);
+  if (missingOptional.length > 0) {
+    console.log(`ℹ️  Optional API keys not set: ${missingOptional.join(', ')}`);
+    console.log(`⚡ Some functionality will be limited without these keys`);
+  }
+  
+  console.log(`✅ Core environment variables are set`);
   return true;
 }
 

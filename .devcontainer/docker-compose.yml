@@ -5,20 +5,26 @@ services:
   app:
     image: mcr.microsoft.com/devcontainers/javascript-node:20-bullseye
     volumes:
-      - ../..:/workspaces/turbo-journey:cached
+      - .:/workspaces/turbo-journey:cached
     working_dir: /workspaces/turbo-journey
-    command: sleep infinity
+    command: |
+      bash -c "
+      apt-get update && 
+      apt-get install -y chromium chromium-sandbox && 
+      sleep infinity
+      "
     environment:
       - NODE_ENV=development
       - PORT=3001
       - MONGODB_URI=mongodb://mongodb:27017/email-generator-dev
       - REDIS_URL=redis://redis:6379
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
     depends_on:
       - mongodb
       - redis
     networks:
       - dev-network
-    # Install Chromium for Puppeteer
     user: root
     privileged: false
 
@@ -33,7 +39,7 @@ services:
       - MONGO_INITDB_DATABASE=email-generator-dev
     volumes:
       - mongodb-data:/data/db
-      - ../../scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
     networks:
       - dev-network
 
