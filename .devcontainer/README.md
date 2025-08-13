@@ -10,9 +10,9 @@ This devcontainer configuration provides a streamlined, reliable development env
 - **VS Code extensions** for TypeScript, Prettier, and testing
 - **Chromium browser** for Puppeteer web scraping
 
-### 🗄️ Database Services (via Codespaces Features)
-- **MongoDB 6.0** running on localhost:27017
-- **Redis 7** running on localhost:6379
+### 🗄️ Database Services (Self-Contained)
+- **MongoDB 6.0** installed and auto-started on localhost:27017
+- **Redis 7** installed and auto-started on localhost:6379
 
 ### 🔌 Port Forwarding
 - **3001**: Main application
@@ -84,9 +84,10 @@ MISSIVE_API_TOKEN=your-missive-token
 - Rebuild container: `Cmd/Ctrl + Shift + P` → "Codespaces: Rebuild Container"
 
 ### Database Connection Issues
-- Check MongoDB status: `sudo systemctl status mongodb`
-- Check Redis status: `sudo systemctl status redis`
-- Restart services if needed: `sudo systemctl restart mongodb redis`
+- Check MongoDB status: `pgrep mongod`
+- Check Redis status: `pgrep redis-server`
+- Restart services: `bash .devcontainer/startup.sh`
+- View MongoDB logs: `tail -f /var/log/mongodb.log`
 
 ### Application Issues
 - Check environment variables: `npm run verify:env`
@@ -116,6 +117,7 @@ MISSIVE_API_TOKEN=your-missive-token
 ## Performance Notes
 
 - **Single container approach**: Faster build and startup times
-- **Codespaces features**: Optimized MongoDB and Redis installations
+- **Self-contained databases**: MongoDB and Redis installed directly in container
+- **Automatic startup**: Databases start automatically with container
 - **Efficient file mounting**: Direct workspace access without volume complexity
 - **Reduced resource usage**: Better performance in Codespaces environment

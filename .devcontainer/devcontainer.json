@@ -8,13 +8,7 @@
   "shutdownAction": "none",
   
   "features": {
-    "ghcr.io/devcontainers/features/github-cli:1": {},
-    "ghcr.io/devcontainers-contrib/features/mongodb:1": {
-      "version": "6.0"
-    },
-    "ghcr.io/devcontainers-contrib/features/redis:1": {
-      "version": "7"
-    }
+    "ghcr.io/devcontainers/features/github-cli:1": {}
   },
 
   "customizations": {
@@ -51,5 +45,5 @@
   },
 
   "postCreateCommand": "npm install",
-  "postStartCommand": "npm run setup:env"
+  "postStartCommand": "bash .devcontainer/startup.sh && npm run setup:env"
 }

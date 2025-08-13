@@ -1,8 +1,9 @@
 # Optimized GitHub Codespaces Development Container
 FROM mcr.microsoft.com/devcontainers/javascript-node:18-bullseye
 
-# Install system dependencies for Puppeteer and development tools
+# Install system dependencies for Puppeteer, MongoDB, and Redis
 RUN apt-get update && apt-get install -y \
+    # Puppeteer dependencies
     chromium \
     chromium-sandbox \
     fonts-liberation \
@@ -22,7 +23,30 @@ RUN apt-get update && apt-get install -y \
     libxss1 \
     libxtst6 \
     xdg-utils \
+    # Database dependencies
+    wget \
+    gnupg \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install MongoDB
+RUN wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | apt-key add - \
+    && echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/debian bullseye/mongodb-org/6.0 main" | tee /etc/apt/sources.list.d/mongodb-org-6.0.list \
+    && apt-get update \
+    && apt-get install -y mongodb-org \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Redis
+RUN apt-get update && apt-get install -y redis-server \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure MongoDB
+RUN mkdir -p /data/db \
+    && chown -R node:node /data/db
+
+# Configure Redis  
+RUN sed -i 's/^daemonize yes/daemonize no/' /etc/redis/redis.conf \
+    && sed -i 's/^bind 127.0.0.1/bind 0.0.0.0/' /etc/redis/redis.conf
 
 # Set environment variables for Puppeteer
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
