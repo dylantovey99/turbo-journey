@@ -12,6 +12,29 @@ Before deploying, ensure you have:
 4. **Missive API Token** for email integration
 5. **Environment Variables** configured (see `.env.production` template)
 
+## 🚂 **RECOMMENDED: Railway Deployment**
+
+**⚡ Quick Start**: See [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) for complete 15-minute setup guide.
+
+**Why Railway?**
+- ✅ Automatic deployments from GitHub
+- ✅ Built-in health checks and monitoring  
+- ✅ Easy database and Redis add-ons
+- ✅ Optimized for Node.js applications
+- ✅ Excellent performance and reliability
+
+**Quick Commands**:
+```bash
+# Validate your environment before deployment
+npm run validate:railway
+
+# Test the configuration
+npm run build:production
+npm run railway:start
+```
+
+---
+
 ## Platform-Specific Deployment
 
 ### Railway

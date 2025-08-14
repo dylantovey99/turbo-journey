@@ -72,19 +72,29 @@ An AI-powered system that scrapes prospect websites, analyzes content against ma
 
 ## 📦 Installation
 
-### 🚀 Quick Start with GitHub Codespaces (Recommended)
+### 🚂 Railway Cloud Deployment (RECOMMENDED)
 
-The fastest way to get started is using GitHub Codespaces - everything is configured automatically!
+**The most reliable way to get this running is with Railway deployment:**
+
+1. **Quick Deploy**: See [RAILWAY_DEPLOYMENT.md](./RAILWAY_DEPLOYMENT.md) for 15-minute setup
+2. **Robust & Reliable**: No file sync issues, production-ready infrastructure  
+3. **Auto-scaling**: Built-in monitoring, health checks, and database management
+4. **Cost-effective**: ~$15-35/month including MongoDB and Redis
+
+```bash
+# Validate your setup before deploying
+npm run validate:railway
+```
+
+### 💻 GitHub Codespaces (Development)
+
+For development environment (has some known sync issues):
 
 1. **Open in Codespaces**: Click "Code" → "Codespaces" → "Create codespace on main"
-2. **Wait for setup**: Automatic installation and build process (~2-3 minutes)
-3. **Start developing**: Run `npm run dev` when setup completes
-4. **Access app**: Open http://localhost:3000
+2. **If setup fails**, run: `bash setup-codespaces.sh`
+3. **Start developing**: `npm run dev`
 
-**If automatic setup fails in Codespaces**, run:
-```bash
-bash setup-codespaces.sh
-```
+**⚠️ Note**: Codespaces has file syncing issues. Railway deployment is more reliable.
 
 ### Prerequisites (Local Development)
 

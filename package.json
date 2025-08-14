@@ -28,7 +28,9 @@
     "typecheck": "tsc --noEmit",
     "test:cloud": "node scripts/test-cloud-deployment.js",
     "predeploy": "node scripts/pre-deploy-check.js",
-    "dev:full": "bash scripts/start-dev-server.sh"
+    "dev:full": "bash scripts/start-dev-server.sh",
+    "validate:railway": "node scripts/validate-railway-env.js",
+    "test:railway": "node scripts/test-railway-deployment.js"
   },
   "keywords": [
     "email",

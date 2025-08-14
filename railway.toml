@@ -1,15 +1,33 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm ci && npm run build"
+buildCommand = "npm ci && npm run build:production"
 
 [deploy]
-startCommand = "npm start"
+startCommand = "npm run railway:start"
 restartPolicyType = "on_failure"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
+healthcheckInterval = 30
+replicas = 1
 
 [env]
 NODE_ENV = "production"
 PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
 PUPPETEER_SKIP_DOWNLOAD = "true"
 PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium-browser"
+
+# Railway optimizations
+[build.nixpacks]
+# Use newer Node version
+nodeVersion = "18"
+
+# Optimize for Railway infrastructure
+[deploy.resources]
+# Start with basic resources, can scale up later
+cpu = "shared"
+memory = "1GB"
+
+[deploy.scaling]
+# Auto-scaling configuration
+minReplicas = 1
+maxReplicas = 3
