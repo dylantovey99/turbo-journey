@@ -72,7 +72,21 @@ An AI-powered system that scrapes prospect websites, analyzes content against ma
 
 ## 📦 Installation
 
-### Prerequisites
+### 🚀 Quick Start with GitHub Codespaces (Recommended)
+
+The fastest way to get started is using GitHub Codespaces - everything is configured automatically!
+
+1. **Open in Codespaces**: Click "Code" → "Codespaces" → "Create codespace on main"
+2. **Wait for setup**: Automatic installation and build process (~2-3 minutes)
+3. **Start developing**: Run `npm run dev` when setup completes
+4. **Access app**: Open http://localhost:3000
+
+**If automatic setup fails in Codespaces**, run:
+```bash
+bash setup-codespaces.sh
+```
+
+### Prerequisites (Local Development)
 
 - Node.js >= 18.0.0
 - npm >= 9.0.0
@@ -81,7 +95,7 @@ An AI-powered system that scrapes prospect websites, analyzes content against ma
 - Claude AI (Anthropic) API key
 - Missive API token (Productive plan required)
 
-### Setup
+### Local Setup
 
 1. **Clone and install dependencies**:
    ```bash

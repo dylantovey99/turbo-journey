@@ -43,6 +43,6 @@
     }
   },
 
-  "postCreateCommand": "bash /workspaces/turbo-journey/.devcontainer/init-workspace.sh create",
-  "postStartCommand": "bash /workspaces/turbo-journey/.devcontainer/init-workspace.sh start"
+  "postCreateCommand": "bash -c 'echo \"🔄 Waiting for workspace to be ready...\"; for i in {1..30}; do if [ -f /workspaces/turbo-journey/package.json ]; then echo \"✅ Workspace ready!\"; cd /workspaces/turbo-journey && npm install && npm run setup:env && npm run build && echo \"🎉 Setup complete!\"; exit 0; fi; echo \"⏳ Waiting... ($i/30)\"; sleep 2; done; echo \"⚠️ Workspace not ready, setup may need to be run manually\"'",
+  "postStartCommand": "bash -c 'cd /workspaces/turbo-journey 2>/dev/null && docker-compose -f .devcontainer/docker-compose.yml up -d mongodb redis 2>/dev/null || echo \"Services will start with the application\"'"
 }
