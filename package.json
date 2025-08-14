@@ -19,7 +19,7 @@
     "verify:imports": "node -e \"require('./dist/server.js'); console.log('✅ Import verification passed')\"",
     "verify:env": "node scripts/verify-environment.js",
     "verify:startup": "timeout 10s node dist/server.js || echo '✅ Startup verification completed'",
-    "railway:build": "npm run setup:env && npm run build",
+    "railway:build": "node scripts/railway-build.js",
     "railway:start": "node dist/server.js",
     "test": "jest",
     "test:coverage": "jest --coverage",

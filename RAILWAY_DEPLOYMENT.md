@@ -73,11 +73,16 @@ MISSIVE_RATE_LIMIT_PER_SECOND=1
 ```
 
 ### Step 3: Deploy
-1. **First deployment**: Click "Deploy" in Railway dashboard after setting environment variables
-2. **Subsequent deployments**: Railway will automatically deploy when you push to main branch  
-3. **Monitor build**: Watch the build logs in Railway dashboard
+1. **Set environment variables FIRST** - This is critical before deployment
+2. **Click "Deploy"** in Railway dashboard to start initial deployment
+3. **Monitor build logs** - Watch the build process in Railway dashboard
 4. **Build time**: Typically takes 3-5 minutes
-5. **Common build issues**: Environment variables not set, missing dependencies
+5. **Subsequent deployments**: Automatic on git push to main branch
+
+**Important Build Notes:**
+- Railway uses a specialized build script that bypasses environment file validation
+- Environment variables are provided by Railway platform, not local files
+- If build fails with "env file" errors, ensure variables are set in Railway dashboard
 
 ### Step 4: Access Your Application
 1. Railway will provide a public URL (e.g., `https://your-app.up.railway.app`)
