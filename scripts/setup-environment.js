@@ -10,7 +10,7 @@ const path = require('path');
 
 function detectPlatform() {
   // Railway detection
-  if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
+  if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID || process.env.RAILWAY_SERVICE_ID) {
     return 'railway';
   }
   
@@ -56,14 +56,33 @@ function setupEnvironment() {
   // Check if platform-specific env file exists
   if (!fs.existsSync(sourceFile)) {
     console.log(`⚠️  Platform-specific env file not found: .env.${platform}`);
-    console.log(`📋 Using generic .env.production template`);
     
+    // For Railway and other cloud platforms, environment variables are provided via the platform
+    // We don't need to copy local env files - just validate that critical env vars are available
+    if (platform === 'railway' || platform === 'render' || platform === 'vercel' || platform === 'production') {
+      console.log(`📋 Cloud platform detected: ${platform}`);
+      console.log(`✅ Environment variables will be provided by ${platform} platform`);
+      console.log(`ℹ️  No local .env file needed for cloud deployment`);
+      
+      // Set platform-specific variables
+      setPlatformSpecificVars(platform);
+      return;
+    }
+    
+    console.log(`📋 Looking for generic .env.production template`);
     const genericFile = path.join(rootDir, '.env.production');
     if (fs.existsSync(genericFile)) {
       fs.copyFileSync(genericFile, targetFile);
       console.log(`✅ Copied .env.production to .env`);
     } else {
-      console.log(`❌ No environment file found. Please create .env manually.`);
+      console.log(`⚠️  No local environment template found`);
+      console.log(`💡 For cloud deployment, environment variables should be set in the platform dashboard`);
+      
+      // Don't exit with error for cloud platforms
+      if (platform === 'railway' || platform === 'render' || platform === 'vercel' || platform === 'production') {
+        return;
+      }
+      
       process.exit(1);
     }
     return;
@@ -120,8 +139,11 @@ function setPlatformSpecificVars(platform) {
 
 function validateEnvironment() {
   const requiredVars = [
-    'NODE_ENV',
-    'PORT',
+    'NODE_ENV'
+  ];
+  
+  // These are required for runtime but can be missing during build
+  const runtimeRequiredVars = [
     'MONGODB_URI',
     'REDIS_URL'
   ];
@@ -133,19 +155,31 @@ function validateEnvironment() {
   ];
   
   const missing = requiredVars.filter(varName => !process.env[varName]);
+  const missingRuntime = runtimeRequiredVars.filter(varName => !process.env[varName]);
   const missingOptional = optionalInDev.filter(varName => !process.env[varName]);
   
   if (missing.length > 0) {
-    console.log(`⚠️  Missing required environment variables: ${missing.join(', ')}`);
-    console.log(`📝 Please set these variables in your deployment platform`);
+    console.log(`❌ Missing critical environment variables: ${missing.join(', ')}`);
+    return false;
+  }
+  
+  if (missingRuntime.length > 0) {
+    console.log(`⚠️  Missing runtime environment variables: ${missingRuntime.join(', ')}`);
+    console.log(`📝 Please set these variables in your deployment platform dashboard`);
     
-    // In development/codespaces, warn but don't fail
-    if (process.env.NODE_ENV === 'development' || process.env.CODESPACES || process.env.CODESPACE_NAME) {
+    // In cloud platforms, these will be provided at runtime
+    const cloudPlatforms = ['railway', 'render', 'vercel', 'production', 'heroku'];
+    const currentPlatform = detectPlatform();
+    
+    if (cloudPlatforms.includes(currentPlatform)) {
+      console.log(`🔧 Continuing build - ${currentPlatform} will provide runtime variables`);
+      console.log(`💡 Ensure environment variables are configured in ${currentPlatform} dashboard`);
+    } else if (process.env.NODE_ENV === 'development' || process.env.CODESPACES || process.env.CODESPACE_NAME) {
       console.log(`🔧 Continuing in development mode with limited functionality`);
       console.log(`💡 Missing variables will use default values or be set up later`);
-      return true;
+    } else {
+      return false;
     }
-    return false;
   }
   
   if (missingOptional.length > 0) {

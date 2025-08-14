@@ -32,6 +32,8 @@ Railway is now the recommended deployment platform for this application. This gu
 
 ### Step 2: Configure Environment Variables
 
+**IMPORTANT**: You must configure these environment variables in the Railway dashboard **before** the first deployment, as they are required for the application to start properly.
+
 In Railway dashboard, go to **Variables** and add:
 
 #### **Required Variables**
@@ -71,9 +73,11 @@ MISSIVE_RATE_LIMIT_PER_SECOND=1
 ```
 
 ### Step 3: Deploy
-1. Railway will automatically deploy when you push to main branch
-2. Watch the build logs in Railway dashboard
-3. Deployment typically takes 3-5 minutes
+1. **First deployment**: Click "Deploy" in Railway dashboard after setting environment variables
+2. **Subsequent deployments**: Railway will automatically deploy when you push to main branch  
+3. **Monitor build**: Watch the build logs in Railway dashboard
+4. **Build time**: Typically takes 3-5 minutes
+5. **Common build issues**: Environment variables not set, missing dependencies
 
 ### Step 4: Access Your Application
 1. Railway will provide a public URL (e.g., `https://your-app.up.railway.app`)
