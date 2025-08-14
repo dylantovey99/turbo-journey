@@ -20,7 +20,7 @@ function detectPlatform() {
   }
   
   // GitHub Codespaces detection
-  if (process.env.CODESPACES || process.env.CODESPACE_NAME) {
+  if (process.env.CODESPACES || process.env.CODESPACE_NAME || process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN) {
     return 'codespaces';
   }
   
@@ -50,6 +50,8 @@ function setupEnvironment() {
   const targetFile = path.join(rootDir, '.env');
   
   console.log(`🔍 Detected platform: ${platform}`);
+  console.log(`📁 Looking for env file: ${sourceFile}`);
+  console.log(`🎯 Target env file: ${targetFile}`);
   
   // Check if platform-specific env file exists
   if (!fs.existsSync(sourceFile)) {
@@ -138,8 +140,9 @@ function validateEnvironment() {
     console.log(`📝 Please set these variables in your deployment platform`);
     
     // In development/codespaces, warn but don't fail
-    if (process.env.NODE_ENV === 'development' || process.env.CODESPACES) {
+    if (process.env.NODE_ENV === 'development' || process.env.CODESPACES || process.env.CODESPACE_NAME) {
       console.log(`🔧 Continuing in development mode with limited functionality`);
+      console.log(`💡 Missing variables will use default values or be set up later`);
       return true;
     }
     return false;

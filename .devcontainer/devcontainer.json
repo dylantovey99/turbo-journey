@@ -29,9 +29,9 @@
     }
   },
 
-  "forwardPorts": [3001, 27017, 6379],
+  "forwardPorts": [3000, 27017, 6379],
   "portsAttributes": {
-    "3001": {
+    "3000": {
       "label": "Application",
       "onAutoForward": "notify"
     },
@@ -43,6 +43,6 @@
     }
   },
 
-  "postCreateCommand": "npm install && npm run setup:env || echo 'Setup completed with warnings'",
-  "postStartCommand": "echo 'Container ready for development'"
+  "postCreateCommand": "npm install && npm run setup:env && npm run build || echo 'Setup completed with warnings'",
+  "postStartCommand": "bash .devcontainer/start-services.sh && bash scripts/auto-start.sh"
 }

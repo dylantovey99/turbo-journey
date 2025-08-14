@@ -27,7 +27,8 @@
     "lint:fix": "eslint src/**/*.ts --fix",
     "typecheck": "tsc --noEmit",
     "test:cloud": "node scripts/test-cloud-deployment.js",
-    "predeploy": "node scripts/pre-deploy-check.js"
+    "predeploy": "node scripts/pre-deploy-check.js",
+    "dev:full": "bash scripts/start-dev-server.sh"
   },
   "keywords": [
     "email",

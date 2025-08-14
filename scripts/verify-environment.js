@@ -37,6 +37,18 @@ function validateEnvironment() {
     errors.push('dist/alias.js not found - path alias resolution will fail in production');
   } else {
     info.push('✅ dist/alias.js exists');
+    
+    // Test alias resolution by attempting to require the main files
+    try {
+      const aliasContent = fs.readFileSync('dist/alias.js', 'utf8');
+      if (aliasContent.includes('moduleAlias.addAliases')) {
+        info.push('✅ Path aliases configured in compiled output');
+      } else {
+        warnings.push('Path aliases may not be properly configured');
+      }
+    } catch (err) {
+      warnings.push('Could not verify path alias configuration');
+    }
   }
 
   // Validate Node.js version

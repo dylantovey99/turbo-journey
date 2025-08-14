@@ -11,11 +11,12 @@ services:
       bash -c "
       apt-get update && 
       apt-get install -y chromium chromium-sandbox && 
+      echo 'Development container ready' &&
       sleep infinity
       "
     environment:
       - NODE_ENV=development
-      - PORT=3001
+      - PORT=3000
       - MONGODB_URI=mongodb://mongodb:27017/email-generator-dev
       - REDIS_URL=redis://redis:6379
       - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true

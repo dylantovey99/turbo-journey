@@ -85,13 +85,45 @@ app.use(limiter);
 app.use(express.static('public'));
 app.use('/node_modules', express.static('node_modules'));
 
-app.get('/health', (req, res) => {
-  res.json({
+app.get('/health', async (req, res) => {
+  const health = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     memory: process.memoryUsage(),
-  });
+    services: {
+      database: false,
+      redis: false,
+    }
+  };
+
+  try {
+    // Check MongoDB connection
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState === 1) {
+      await mongoose.connection.db.admin().ping();
+      health.services.database = true;
+    }
+  } catch (error) {
+    logger.warn('Health check: Database connection failed', error);
+  }
+
+  try {
+    // Check Redis connection
+    const { redisClient } = require('@/services/queue/redis');
+    if (redisClient?.isReady) {
+      await redisClient.ping();
+      health.services.redis = true;
+    }
+  } catch (error) {
+    logger.warn('Health check: Redis connection failed', error);
+  }
+
+  // Overall health status
+  const allServicesHealthy = Object.values(health.services).every(status => status === true);
+  health.status = allServicesHealthy ? 'healthy' : 'degraded';
+
+  res.status(allServicesHealthy ? 200 : 503).json(health);
 });
 
 // Ensure uploads directory exists
