@@ -2,17 +2,33 @@
 
 echo "🚀 Starting services for GitHub Codespaces..."
 
+# Ensure we're in the right directory
+cd /workspaces/turbo-journey || {
+    echo "❌ Could not change to workspace directory"
+    exit 1
+}
+
 # Wait for Docker services to be ready
 echo "⏳ Waiting for MongoDB and Redis to be ready..."
 
 # Function to check if MongoDB is ready
 check_mongodb() {
-    docker-compose -f .devcontainer/docker-compose.yml exec -T mongodb mongosh --eval "db.runCommand('ping')" >/dev/null 2>&1
+    if command -v mongosh >/dev/null 2>&1; then
+        mongosh mongodb://localhost:27017/test --eval "db.runCommand('ping')" --quiet >/dev/null 2>&1
+    else
+        # Fallback to docker exec if mongosh not available locally
+        docker-compose -f .devcontainer/docker-compose.yml exec -T mongodb mongosh --eval "db.runCommand('ping')" --quiet >/dev/null 2>&1
+    fi
 }
 
 # Function to check if Redis is ready
 check_redis() {
-    docker-compose -f .devcontainer/docker-compose.yml exec -T redis redis-cli ping >/dev/null 2>&1
+    if command -v redis-cli >/dev/null 2>&1; then
+        redis-cli -h localhost -p 6379 ping >/dev/null 2>&1
+    else
+        # Fallback to docker exec if redis-cli not available locally
+        docker-compose -f .devcontainer/docker-compose.yml exec -T redis redis-cli ping >/dev/null 2>&1
+    fi
 }
 
 # Start services if they're not running

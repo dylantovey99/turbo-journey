@@ -43,6 +43,6 @@
     }
   },
 
-  "postCreateCommand": "npm install && npm run setup:env && npm run build || echo 'Setup completed with warnings'",
-  "postStartCommand": "bash .devcontainer/start-services.sh && bash scripts/auto-start.sh"
+  "postCreateCommand": "bash /workspaces/turbo-journey/.devcontainer/init-workspace.sh create",
+  "postStartCommand": "bash /workspaces/turbo-journey/.devcontainer/init-workspace.sh start"
 }
